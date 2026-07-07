@@ -9,7 +9,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
@@ -22,6 +21,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Downcase repo name (Docker requires lowercase)
+        id: repo
+        run: |
+          echo "image=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+          echo "actor=$(echo '${{ github.actor }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -30,18 +35,18 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ steps.repo.outputs.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build timestamp
+        id: ts
+        run: echo "tag=$(TZ=Asia/Shanghai date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
 
       - name: Extract labels
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Build timestamp
-        id: ts
-        run: echo "tag=$(TZ=Asia/Shanghai date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+          images: ${{ env.REGISTRY }}/${{ steps.repo.outputs.image }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -50,8 +55,8 @@ jobs:
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.ts.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ steps.repo.outputs.image }}:latest
+            ${{ env.REGISTRY }}/${{ steps.repo.outputs.image }}:${{ steps.ts.outputs.tag }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
