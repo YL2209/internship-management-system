@@ -27,7 +27,7 @@ backups/
 journals/
 
 # 用户配置文件（含密钥/Token）
-config.json
+# config.json
 
 # 会话缓存
 .session_cache.json

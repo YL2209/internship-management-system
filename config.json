@@ -1,0 +1,66 @@
+{
+    "auth_mode": "auto",
+    "auto_backup": {
+        "enabled": false,
+        "interval_hours": 24,
+        "max_backups": 30
+    },
+    "cache_ttl_clock_detail": 7200,
+    "cache_ttl_journal_list": 43200,
+    "cache_ttl_ranking": 3600,
+    "code": "",
+    "dailyDriftMaxMeters": 400,
+    "dailyDriftMinMeters": 1,
+    "device": {
+        "brand": "iPhone",
+        "model": "iPad Pro 11 inch (3rd generation) Wi-Fi",
+        "system": "iOS 27.0",
+        "platform": "ios"
+    },
+    "encryptValue": "",
+    "location": {
+        "latitude": "39.916527",
+        "longitude": "116.397128"
+    },
+    "locationJitterMeters": 140,
+    "mapApiKeys": {
+        "amap": "",
+        "tencent": "GOZBZ-E4L67-6WLXT-PSLBH-2WEZZ-LOFLE"
+    },
+    "mapProvider": "tencent",
+    "map_radius": 500,
+    "openId": "",
+    "requestTimeout": 10,
+    "schedule": {
+        "enabled": false,
+        "maxRetries": 1,
+        "retryIntervalSeconds": 300,
+        "tasks": [
+            {
+                "action": "sign_in",
+                "random_window": 600,
+                "time": "09:00:00",
+                "tolerance": 60
+            },
+            {
+                "action": "sign_out",
+                "random_window": 600,
+                "time": "17:00:00",
+                "tolerance": 60
+            }
+        ],
+        "workdays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+        ]
+    },
+    "sessionExpireSeconds": 21600,
+    "sessionId": "",
+    "unionId": "",
+    "userAgent": ""
+}
