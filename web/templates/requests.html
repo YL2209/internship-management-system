@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}请求日志{% endblock %}
+{% block page_title %}<i class="fa-solid fa-network-wired"></i> 请求日志{% endblock %}
+{% block content %}
+<div class="card"><div class="card-header flex justify-between flex-wrap gap-2">
+    <span>HTTP 请求日志 （<small class="text-muted" id="reqSummary"></small>）</span>
+    <div class="flex gap-1 flex-wrap">
+        <input type="date" class="form-control" id="rfStart" style="width:135px" onchange="loadPage(1)">
+        <input type="date" class="form-control" id="rfEnd" style="width:135px" onchange="loadPage(1)">
+        <select class="form-select" id="rfAction" onchange="loadPage(1)" style="width:120px">
+            <option value="">全部</option><option value="sign_in">签到</option><option value="sign_out">签退</option>
+            <option value="getOpenId">获取OpenId</option><option value="getPlan">获取计划</option>
+        </select>
+        <select class="form-select" id="rfPerPage" onchange="loadPage(1)" style="width:105px">
+            <option value="10">10条/页</option><option value="20" selected>20条/页</option><option value="50">50条/页</option><option value="100">100条/页</option>
+        </select>
+        <input type="text" class="form-control" id="rfSearch" placeholder="搜索动作/URL/请求/响应/时间..." style="width:170px" onkeydown="if(event.key==='Enter')loadPage(1)">
+        <button class="btn btn-outline btn-sm" onclick="loadPage(1)"><i class="fa-solid fa-magnifying-glass"></i></button>
+    </div>
+</div>
+<div class="table-wrap"><table>
+    <thead><tr><th style="width:185px">时间</th><th style="width:100px">动作</th><th>URL</th><th style="width:70px">状态码</th><th style="width:70px">耗时</th><th style="width:50px"></th></tr></thead>
+    <tbody id="reqBody"><tr><td colspan="6" class="text-center text-muted p-3">加载中...</td></tr></tbody>
+</table></div>
+<div class="flex justify-between p-2"><small class="text-muted" id="reqInfo"></small><div class="flex gap-1" id="reqPages"></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+var page=1;
+var expanded=null;
+
+function statusBadge(sc) {
+    var code = parseInt(sc, 10);
+    if (isNaN(code)) return '<span class="badge">' + App.escapeHtml(sc || '?') + '</span>';
+    if (code >= 500) return '<span class="badge badge-danger">' + code + '</span>';
+    if (code >= 400) return '<span class="badge badge-warning">' + code + '</span>';
+    if (code >= 300) return '<span class="badge badge-info">' + code + '</span>';
+    if (code >= 200) return '<span class="badge badge-success">' + code + '</span>';
+    if (code >= 100) return '<span class="badge">' + code + '</span>';
+    return '<span class="badge">' + code + '</span>';
+}
+
+async function loadPage(p) {
+    page=p||1;
+    var perPage = document.getElementById('rfPerPage').value || 20;
+    var params=new URLSearchParams({page:page,per_page:perPage,start_date:document.getElementById('rfStart').value,end_date:document.getElementById('rfEnd').value,action:document.getElementById('rfAction').value,search:document.getElementById('rfSearch').value.trim()});
+
+    var tbody = document.getElementById('reqBody');
+    tbody.innerHTML = App.renderLoading(6);
+
+    try {
+        var data=await App.api('/api/requests?'+params);
+        if(!data.success){
+            tbody.innerHTML = App.renderError(6, App.escapeHtml(data.message));
+            return;
+        }
+        document.getElementById('reqSummary').textContent='共 '+data.total+' 条数据';
+
+        if(!data.logs.length){
+            tbody.innerHTML = App.renderEmpty(6, '暂无请求日志');
+            document.getElementById('reqPages').innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML=data.logs.map(function(r,i){
+            var rid='req'+i;
+            return'<tr id="'+rid+'" style="cursor:pointer" onclick="toggleDetail(\''+rid+'\','+i+')">'+
+                '<td class="text-mono text-sm" data-label="时间">'+App.escapeHtml(r.timestamp||'')+'</td>'+
+                '<td class="text-sm" data-label="动作">'+App.escapeHtml(r.action||'')+'</td>'+
+                '<td class="text-sm truncate" style="max-width:300px" data-label="URL">'+App.escapeHtml((r.url||'').substring(0,80))+'</td>'+
+                '<td data-label="状态码">'+statusBadge(r.resp_status||0)+'</td>'+
+                '<td class="text-sm" data-label="耗时">'+(r.duration_ms||'-')+'ms</td>'+
+                '<td id="'+rid+'_icon" data-label="">&#9654;</td></tr>'+
+            '<tr id="'+rid+'_detail" class="hidden"><td colspan="6" style="max-width:100vw;overflow-x:auto;background:var(--peach-pale)"><div class="p-2" style="max-height:600px;overflow-y:auto;max-width:100%;">'+
+                '<div><strong>请求头:</strong><pre class="text-sm p-1" style="background:var(--ink);color:#7ED687;border-radius:4px;height:120px;min-height:60px;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;">'+App.escapeHtml(JSON.stringify(r.req_headers||{},null,2))+'</pre></div>'+
+                '<div><strong>请求参数:</strong><pre class="text-sm p-1" style="background:var(--ink);color:#7ED687;border-radius:4px;height:80px;min-height:40px;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;">'+App.escapeHtml(JSON.stringify(r.req_params||{},null,2))+'</pre></div>'+
+                '<div><strong>Cookie:</strong><pre class="text-sm p-1" style="background:var(--ink);color:#7ED687;border-radius:4px;height:80px;min-height:40px;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;">'+App.escapeHtml(JSON.stringify(r.req_cookies||{},null,2))+'</pre></div>'+
+                '<strong class="mt-1">请求体:</strong><pre class="text-sm p-1 mt-1" style="background:var(--peach-pale);border-radius:4px;height:100px;min-height:50px;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;">'+App.escapeHtml(r.req_body||'(空)')+'</pre>'+
+                '<strong class="mt-1">响应体:</strong><pre class="text-sm p-1 mt-1" style="background:var(--peach-pale);border-radius:4px;height:150px;min-height:50px;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;">'+App.escapeHtml(formatJson(r.resp_body||''))+'</pre>'+
+                (r.error?'<div class="mt-1"><strong class="text-danger">错误:</strong><pre class="text-sm text-danger p-1" style="background:var(--peach-pale);border-radius:4px;height:80px;min-height:40px;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;">'+App.escapeHtml(r.error)+'</pre></div>':'')+
+            '</div></td></tr>';
+        }).join('');
+
+        App.renderPagination(data, 'reqPages', 'reqInfo', loadPage);
+
+    } catch(e) {
+        tbody.innerHTML = App.renderError(6, e.message);
+    }
+}
+
+function toggleDetail(rid,i){
+    var detail=document.getElementById(rid+'_detail');
+    var icon=document.getElementById(rid+'_icon');
+    if(detail.classList.contains('hidden')){detail.classList.remove('hidden');icon.textContent='\u25BE';}
+    else{detail.classList.add('hidden');icon.textContent='\u25B8';}
+}
+function formatJson(s){try{return JSON.stringify(JSON.parse(s),null,2);}catch(e){return s;}}
+loadPage(1);
+</script>
+{% endblock %}

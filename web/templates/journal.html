@@ -1,0 +1,852 @@
+{% extends "base.html" %}
+{% block title %}周记管理 - 实习数据管理系统{% endblock %}
+{% block page_title %}<i class="fa-solid fa-book-open"></i> 周记管理{% endblock %}
+
+{% block head %}
+<style>
+    .journal-wrap {
+        max-width: 960px;
+        margin: 0 auto;
+    }
+
+    /* ===== Tab 导航 ===== */
+    .tab-nav {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        background: rgba(255, 255, 255, 0.55);
+        backdrop-filter: blur(8px);
+        border-radius: 20px;
+        margin-bottom: 28px;
+        border: 1px solid rgba(255, 182, 193, 0.15);
+    }
+
+    .tab-btn {
+        flex: 1;
+        padding: 10px 16px;
+        border: none;
+        border-radius: 16px;
+        cursor: pointer;
+        font-size: 0.84rem;
+        font-weight: 500;
+        color: var(--slate);
+        background: transparent;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .tab-btn:hover {
+        color: var(--rose-dark);
+        background: rgba(212, 96, 112, 0.05);
+    }
+
+    .tab-btn.active {
+        background: linear-gradient(135deg, var(--rose), var(--rose-dark));
+        color: #fff;
+        font-weight: 600;
+        box-shadow: 0 4px 14px rgba(212, 96, 112, 0.25);
+    }
+
+    .tab-panel {
+        display: none;
+    }
+
+    .tab-panel.active {
+        display: block;
+    }
+
+    /* ===== 表单 ===== */
+    .field {
+        margin-bottom: 16px;
+    }
+
+    .field-label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        color: var(--slate);
+    }
+
+    .field-input,
+    .field-textarea,
+    .field-select {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1.5px solid rgba(255, 182, 193, 0.22);
+        border-radius: 12px;
+        font-size: 0.88rem;
+        font-family: inherit;
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(4px);
+        color: var(--ink);
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .field-input:focus,
+    .field-textarea:focus,
+    .field-select:focus {
+        outline: none;
+        border-color: var(--rose-light);
+        box-shadow: 0 0 0 4px rgba(212, 96, 112, 0.06);
+    }
+
+    .field-textarea {
+        min-height: 200px;
+        resize: vertical;
+    }
+
+    .field-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    /* ===== 素材库 ===== */
+    .library-toolbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .library-toolbar select {
+        width: auto;
+        min-width: 140px;
+    }
+
+    .library-toolbar .count-badge {
+        font-size: 0.76rem;
+        color: var(--slate);
+        margin-left: auto;
+        background: rgba(255, 255, 255, 0.55);
+        padding: 4px 12px;
+        border-radius: 12px;
+    }
+
+    .library-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 12px;
+    }
+
+    .lib-card {
+        background: rgba(255, 250, 245, 0.85);
+        backdrop-filter: blur(6px);
+        border-radius: 16px;
+        padding: 20px;
+        cursor: pointer;
+        position: relative;
+        border: 1px solid rgba(255, 182, 193, 0.7);
+        transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+        overflow: hidden;
+    }
+
+    .lib-card:hover {
+        border-color: rgba(212, 96, 112, 0.3);
+        box-shadow: 0 8px 32px rgba(212, 96, 112, 0.10);
+        transform: translateY(-2px);
+    }
+
+    .lib-card.is-selected {
+        border-color: var(--rose);
+        box-shadow: 0 0 0 2px rgba(212, 96, 112, 0.15);
+    }
+
+    .lib-title {
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: var(--ink);
+        margin-bottom: 8px;
+        line-height: 1.4;
+        padding-right: 48px;
+    }
+
+    .lib-body {
+        font-size: 0.78rem;
+        color: var(--slate);
+        line-height: 1.7;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        max-height: 4em;
+        white-space: pre-wrap;
+    }
+
+    .lib-count {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--rose);
+        background: rgba(255, 182, 193, 0.15);
+        padding: 3px 10px;
+        border-radius: 10px;
+    }
+
+    /* ===== 提交记录 ===== */
+    .record-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .record-item {
+        padding: 16px 20px;
+        border-radius: 14px;
+        background: rgba(255, 250, 245, 0.85);
+        transition: background 0.2s;
+        border: 1px solid rgba(255, 182, 193, 0.7);
+    }
+
+    .record-item:hover {
+        background: rgba(255, 255, 255, 0.75);
+        border-color: rgba(255, 182, 193, 0.12);
+    }
+
+    .record-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
+
+    .record-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--ink);
+    }
+
+    .record-meta {
+        font-size: 0.76rem;
+        color: var(--slate);
+    }
+
+    .record-body {
+        font-size: 0.8rem;
+        color: var(--slate);
+        line-height: 1.6;
+        margin-top: 4px;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    .record-error {
+        font-size: 0.72rem;
+        color: var(--red);
+        margin-top: 4px;
+    }
+
+    /* ===== 空状态 ===== */
+    .empty-state {
+        text-align: center;
+        padding: 48px 16px;
+        color: var(--slate);
+        font-size: 0.85rem;
+    }
+
+    .empty-state i {
+        font-size: 2rem;
+        display: block;
+        margin-bottom: 12px;
+        opacity: 0.3;
+    }
+
+    /* ===== 提交表单布局 ===== */
+    .submit-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .submit-layout .full {
+        grid-column: 1 / -1;
+    }
+
+    .submit-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding-top: 8px;
+    }
+
+    .submit-status {
+        flex: 1;
+        font-size: 0.84rem;
+        min-height: 1.5em;
+    }
+
+    /* ===== 最近已提交预览（网格布局，全记录） ===== */
+    .recent-card {
+        background: rgba(255, 250, 245, 0.7);
+        border: 1px solid rgba(255, 182, 193, 0.3);
+        border-radius: 12px;
+        margin-top: 20px;
+    }
+
+    .recent-card .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    .recent-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 12px;
+        padding: 8px 14px 14px;
+    }
+
+    /* 卡片风格完全复用素材库样式 */
+    .recent-grid .lib-card {
+        background: rgba(255, 250, 245, 0.85);
+        backdrop-filter: blur(6px);
+        border-radius: 16px;
+        padding: 20px;
+        position: relative;
+        border: 1px solid rgba(255, 182, 193, 0.7);
+        transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+        overflow: hidden;
+    }
+
+    .recent-grid .lib-card:hover {
+        border-color: rgba(212, 96, 112, 0.3);
+        box-shadow: 0 8px 32px rgba(212, 96, 112, 0.10);
+        transform: translateY(-2px);
+    }
+
+    .recent-grid .lib-title {
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: var(--ink);
+        margin-bottom: 8px;
+        line-height: 1.4;
+        padding-right: 48px;
+    }
+
+    .recent-grid .lib-body {
+        font-size: 0.78rem;
+        color: var(--slate);
+        line-height: 1.7;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        max-height: 4em;
+        white-space: pre-wrap;
+    }
+
+    .recent-grid .lib-dates {
+        font-size: 0.7rem;
+        color: var(--slate);
+        margin-bottom: 6px;
+    }
+
+    .recent-grid .lib-status {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 10px;
+    }
+
+    @media (max-width: 768px) {
+        .tab-nav {
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            flex: 1 1 calc(50% - 4px);
+            padding: 8px 12px;
+            font-size: 0.78rem;
+            border-radius: 14px;
+        }
+
+        .field-row {
+            grid-template-columns: 1fr;
+        }
+
+        .submit-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .library-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .recent-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="journal-wrap">
+
+    <nav class="tab-nav" role="tablist">
+        <button class="tab-btn active" role="tab" onclick="switchTab('library')" aria-selected="true">
+            <i class="fa-solid fa-books"></i> 素材库</button>
+        <button class="tab-btn" role="tab" onclick="switchTab('submitted')" aria-selected="false">
+            <i class="fa-solid fa-list-check"></i> 提交记录</button>
+        <button class="tab-btn" role="tab" onclick="switchTab('manual')" aria-selected="false">
+            <i class="fa-solid fa-pen-to-square"></i> 提交周记/月记</button>
+    </nav>
+
+    <!-- 素材库 -->
+    <div id="tab-library" class="tab-panel active">
+        <div class="library-toolbar">
+            <select class="field-select" id="library-filter" onchange="loadLibrary(true)">
+                <option value="weekly">周记</option>
+                <option value="monthly">月记</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="loadLibrary(true)"><i class="fa-solid fa-rotate"></i>
+                刷新</button>
+            <span class="count-badge" id="lib-count">-</span>
+        </div>
+        <div id="library-grid" class="library-grid">
+            <div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>
+        </div>
+    </div>
+
+    <!-- 提交记录（本地记录） -->
+    <div id="tab-submitted" class="tab-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <p style="margin:0;font-size:0.82rem;color:var(--slate)">所有通过本系统提交到小程序的记录</p>
+            <button class="btn btn-outline btn-sm" onclick="loadSubmittedList()"><i class="fa-solid fa-rotate"></i>
+                刷新</button>
+        </div>
+        <div id="submitted-list" class="record-list">
+            <div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>
+        </div>
+    </div>
+
+    <!-- 提交周记/月记 -->
+    <div id="tab-manual" class="tab-panel">
+        <div class="submit-layout">
+            <div class="field"><label class="field-label">类型</label>
+                <select id="manual-type" class="field-select" onchange="updateCharCount();loadRecentSubmitted()">
+                    <option value="weekly">周记</option>
+                    <option value="monthly">月记</option>
+                </select>
+            </div>
+            <div class="field"><label class="field-label">查看权限</label>
+                <select id="manual-open-type" class="field-select">
+                    <option value="0">全网可见</option>
+                    <option value="1">仅老师和同学可见</option>
+                    <option value="2" selected>仅老师可见</option>
+                </select>
+            </div>
+            <div class="field full"><label class="field-label">标题</label>
+                <input type="text" id="manual-title" class="field-input" placeholder="周记/月记标题">
+            </div>
+            <div class="field"><label class="field-label">开始日期</label>
+                <input type="date" id="manual-start" class="field-input">
+            </div>
+            <div class="field"><label class="field-label">结束日期</label>
+                <input type="date" id="manual-end" class="field-input">
+            </div>
+            <div class="field full">
+                <label class="field-label">正文内容 <span id="char-counter"
+                        style="font-weight:400;font-size:0.8rem;color:var(--slate)">0字</span></label>
+                <textarea id="manual-body" class="field-textarea" style="min-height:280px" placeholder="请输入周记/月记内容..."
+                    oninput="updateCharCount()"></textarea>
+            </div>
+        </div>
+        <div class="submit-actions">
+            <button class="btn btn-primary" onclick="manualSubmit()"><i class="fa-solid fa-paper-plane"></i>
+                提交到小程序</button>
+            <button class="btn btn-success" onclick="manualSaveToLibrary()"><i class="fa-solid fa-floppy-disk"></i>
+                保存到素材库</button>
+            <span class="submit-status" id="manual-status"></span>
+        </div>
+
+        <!-- 最近已提交预览（网格，全记录，放在表单下方） -->
+        <div id="recent-submitted" class="recent-card" style="display:none">
+            <div class="card-header">
+                <span>最近已提交</span>
+                <span style="font-size:0.7rem;color:var(--slate)">（避免重复提交）</span>
+            </div>
+            <div id="recent-grid" class="recent-grid">
+                <div class="text-center text-muted" style="font-size:0.8rem">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ====== 弹窗（放在 .journal-wrap 外部，确保 position:fixed 相对于视口） ====== -->
+
+<!-- 预览素材 -->
+<div id="preview-overlay" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:750px">
+        <div class="modal-header">
+            <strong id="preview-title"></strong>
+            <span id="preview-meta" style="font-size:0.78rem;color:var(--slate)"></span>
+        </div>
+        <div class="modal-body">
+            <pre id="preview-body"
+                style="margin:0;font-size:0.9rem;line-height:2;white-space:pre-wrap;color:var(--ink);font-family:inherit;max-height:55vh;overflow-y:auto"></pre>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-success btn-sm" onclick="useFromPreview()"><i class="fa-solid fa-file-lines"></i>
+                使用此内容</button>
+            <button class="btn btn-outline btn-sm" onclick="editFromPreview()"><i class="fa-solid fa-pen-to-square"></i>
+                编辑</button>
+            <span style="flex:1"></span>
+            <button class="btn btn-sm" style="background:#e74c3c;color:#fff" onclick="deleteFromPreview()"><i
+                    class="fa-solid fa-trash-can"></i> 删除</button>
+            <button class="btn btn-outline btn-sm" onclick="closePreview()">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑素材 -->
+<div id="editor-overlay" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:800px">
+        <div class="modal-header">
+            <h5><i class="fa-solid fa-pen-to-square"></i> 编辑素材</h5>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+            <div class="field"><label class="field-label">标题</label><input type="text" id="editor-title"
+                    class="field-input"></div>
+            <div class="field" style="flex:1;display:flex;flex-direction:column">
+                <label class="field-label">正文内容</label>
+                <textarea id="editor-body" class="field-textarea" style="flex:1;min-height:320px"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <span id="editor-status" style="flex:1;font-size:0.84rem"></span>
+            <button class="btn btn-outline btn-sm" onclick="closeEditor()">取消</button>
+            <button class="btn btn-primary btn-sm" onclick="saveEdit()"><i class="fa-solid fa-floppy-disk"></i>
+                保存</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let selectedJournal = null;
+    var _libraryCache = null;
+
+    /* ---- Tab 切换 ---- */
+    function switchTab(name) {
+        document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+        document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+
+        var labels = { library: '素材库', submitted: '提交记录', manual: '提交周记' };
+        document.querySelectorAll('.tab-btn').forEach(function (b) {
+            for (var k in labels) { if (b.textContent.indexOf(labels[k]) !== -1) { if (k === name) { b.classList.add('active'); b.setAttribute('aria-selected', 'true'); } } }
+        });
+        var panel = document.getElementById('tab-' + name);
+        if (panel) panel.classList.add('active');
+
+        if (name === 'library') loadLibrary(true);
+        else if (name === 'submitted') loadSubmittedList();
+        else if (name === 'manual') loadRecentSubmitted();
+    }
+
+    /* ---- 素材库加载 ---- */
+    async function loadLibrary(force) {
+        var grid = document.getElementById('library-grid');
+        var filter = document.getElementById('library-filter').value;
+        var countEl = document.getElementById('lib-count');
+        grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>';
+        countEl.textContent = '-';
+
+        try {
+            if (!force && _libraryCache && _libraryCache.filter === filter) {
+                var items = _libraryCache.items;
+                if (!items.length) { grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-folder-open"></i> 暂无数据</div>'; countEl.textContent = '0篇'; return; }
+                countEl.textContent = items.length + '篇';
+                var html = '';
+                for (var i = 0; i < items.length; i++) {
+                    var item = items[i];
+                    html += '<div class="lib-card" onclick="selectFromLibrary(\'' + item.id + '\')">' +
+                        '<span class="lib-count">' + item.char_count + '字</span>' +
+                        '<div class="lib-title">' + App.escapeHtml(item.title) + '</div>' +
+                        '<div class="lib-body">' + App.escapeHtml(item.body.substring(0, 150)) + '</div></div>';
+                }
+                grid.innerHTML = html; return;
+            }
+
+            var resp = await App.api('/api/journal/library?type=' + filter + '&_=' + Date.now());
+            if (!resp.success) { grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(resp.message) + '</div>'; return; }
+            var items = (filter === 'weekly' ? resp.library.weekly : resp.library.monthly) || [];
+            _libraryCache = { filter: filter, items: items };
+
+            App.api('/api/journal/library?type=all').then(function (resp) {
+                if (resp.success) { var w = (resp.library.weekly || []).length; var m = (resp.library.monthly || []).length; countEl.textContent = '周' + w + '篇 · 月' + m + '篇'; }
+            });
+
+            if (!items.length) { grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-folder-open"></i> 暂无数据</div>'; countEl.textContent = '0篇'; return; }
+            countEl.textContent = items.length + '篇';
+            var html = '';
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                html += '<div class="lib-card" onclick="selectFromLibrary(\'' + item.id + '\')">' +
+                    '<span class="lib-count">' + item.char_count + '字</span>' +
+                    '<div class="lib-title">' + App.escapeHtml(item.title) + '</div>' +
+                    '<div class="lib-body">' + App.escapeHtml(item.body.substring(0, 150)) + '</div></div>';
+            }
+            grid.innerHTML = html;
+        } catch (e) {
+            grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(e.message) + '</div>';
+        }
+    }
+
+    /* ---- 预览弹窗 ---- */
+    function selectFromLibrary(id) {
+        var filter = document.getElementById('library-filter').value;
+        App.api('/api/journal/library?type=' + filter).then(function (resp) {
+            var items = (filter === 'weekly' ? resp.library.weekly : resp.library.monthly) || [];
+            var item = items.find(function (i) { return i.id === id; });
+            if (!item) return;
+            selectedJournal = item;
+            document.getElementById('preview-title').textContent = item.title;
+            var meta = item.char_count + '字';
+            if (item.start_date) meta += ' | ' + item.start_date + ' ~ ' + (item.end_date || '');
+            document.getElementById('preview-meta').textContent = meta;
+            document.getElementById('preview-body').textContent = item.body;
+            App.modalOpen('preview-overlay');
+        });
+    }
+
+    function closePreview() { App.modalClose('preview-overlay'); }
+    function useFromPreview() { if (!selectedJournal) return; closePreview(); useSelectedInManual(); }
+    function editFromPreview() { closePreview(); openEditor(); }
+
+    async function deleteFromPreview() {
+        if (!selectedJournal) return;
+        if (!window.confirm('确定删除素材库中的「' + selectedJournal.title + '」？')) return;
+        try {
+            var resp = await App.api('/api/journal/library', { method: 'DELETE', body: JSON.stringify({ id: selectedJournal.id }) });
+            if (!resp.success) {
+                // window.alert('删除失败: ' + (resp.message || '')); 
+                App.toast('删除失败: ' + resp.message, 'error');
+                return;
+            }
+            closePreview(); selectedJournal = null; loadLibrary(true);
+            App.toast('删除成功', 'success');
+        } catch (e) {
+            // window.alert('删除异常: ' + (e.message || '')); 
+            App.toast('删除异常: ' + e.message, 'warning');
+        }
+    }
+
+    function useSelectedInManual() {
+        if (!selectedJournal) return;
+        document.getElementById('manual-type').value = selectedJournal.id.indexOf('weekly_') === 0 ? 'weekly' : 'monthly';
+        document.getElementById('manual-title').value = selectedJournal.title;
+        document.getElementById('manual-body').value = selectedJournal.body;
+        if (selectedJournal.start_date) document.getElementById('manual-start').value = selectedJournal.start_date.replace(/\./g, '-');
+        if (selectedJournal.end_date) document.getElementById('manual-end').value = selectedJournal.end_date.replace(/\./g, '-');
+        updateCharCount();
+        switchTab('manual');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /* ---- 字数统计 ---- */
+    function updateCharCount() {
+        var n = document.getElementById('manual-body').value.length;
+        var el = document.getElementById('char-counter');
+        el.innerHTML = '（' + n + '字' + (n < 200 ? '，最少200字' : '') + '）';
+        el.style.color = n < 200 ? '#e74c3c' : '#27ae60';
+    }
+
+    /* ---- 编辑器弹窗 ---- */
+    function openEditor() {
+        if (!selectedJournal) return;
+        document.getElementById('editor-title').value = selectedJournal.title;
+        document.getElementById('editor-body').value = selectedJournal.body;
+        document.getElementById('editor-status').textContent = '';
+        App.modalOpen('editor-overlay');
+        setTimeout(function () { document.getElementById('editor-body').focus(); }, 100);
+    }
+
+    function closeEditor() {
+        var origBody = selectedJournal ? selectedJournal.body : '';
+        var curBody = document.getElementById('editor-body').value;
+        if (curBody !== origBody && curBody) { if (!window.confirm('内容已修改，确定不保存就关闭？')) return; }
+        App.modalClose('editor-overlay');
+        document.getElementById('editor-status').textContent = '';
+    }
+
+    async function saveEdit() {
+        if (!selectedJournal) return;
+        var status = document.getElementById('editor-status');
+        var title = document.getElementById('editor-title').value.trim();
+        var body = document.getElementById('editor-body').value;
+        if (!body) { status.textContent = '正文不能为空'; return; }
+        if (body.length < 200) { status.textContent = '正文至少200字（当前' + body.length + '字）'; return; }
+        status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 保存中...';
+        try {
+            var resp = await App.api('/api/journal/library', { method: 'PUT', body: JSON.stringify({ id: selectedJournal.id, title: title, body: body }) });
+            if (!resp.success) { status.textContent = '保存失败: ' + resp.message; return; }
+            selectedJournal.title = title || selectedJournal.title;
+            selectedJournal.body = body;
+            selectedJournal.char_count = resp.char_count;
+            closeEditor(); loadLibrary(true);
+            if (document.getElementById('preview-overlay').classList.contains('hidden') === false) {
+                document.getElementById('preview-title').textContent = selectedJournal.title;
+                document.getElementById('preview-meta').textContent = selectedJournal.char_count + '字';
+                document.getElementById('preview-body').textContent = selectedJournal.body;
+            }
+        } catch (e) { status.textContent = '保存失败: ' + (e.message || '未知错误'); }
+    }
+
+    /* ---- 手动提交 ---- */
+    async function manualSubmit() {
+        var status = document.getElementById('manual-status');
+        var title = document.getElementById('manual-title').value.trim();
+        var body = document.getElementById('manual-body').value;
+        var s = document.getElementById('manual-start').value;
+        var e = document.getElementById('manual-end').value;
+        var type = document.getElementById('manual-type').value;
+        var ot = parseInt(document.getElementById('manual-open-type').value, 10);
+
+        if (type !== 'weekly' && type !== 'monthly') {
+            status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> 类型选择错误</span>';
+            return;
+        }
+        if (!title || !body) { status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> 请填写标题和内容</span>'; return; }
+        if (body.length < 200) { status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> 正文至少200字（当前' + body.length + '字）</span>'; return; }
+
+        if (!s || !e) {
+            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 未指定日期，将通过 API 获取当前周/月范围后提交...<br><small style="color:var(--slate)">提示：空日期仅支持提交当前所在周记或月记</small>';
+        } else {
+            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 提交到小程序...';
+        }
+        if (s && e && !Validator.isDateRangeValid(s, e)) {
+            status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> 开始日期不能晚于结束日期</span>';
+            return;
+        }
+        try {
+            var resp = await App.api('/api/journal/submit', { method: 'POST', body: JSON.stringify({ title: title, body: body, start_date: s, end_date: e, type: type, blog_open_type: ot }) });
+            if (!resp.success) { status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(resp.message) + '</span>'; return; }
+            loadSubmittedList();
+            loadRecentSubmitted(true);
+            status.innerHTML = '<span style="color:#27ae60"><i class="fa-solid fa-circle-check"></i> 提交成功!</span>';
+        } catch (e) { status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(e.message) + '</span>'; }
+    }
+
+    async function saveToLibrary(title, body, type, startDate, endDate) {
+        var libResp = await App.api('/api/journal/library?type=' + type);
+        var items = (type === 'weekly' ? libResp.library.weekly : libResp.library.monthly) || [];
+        var prefix = type === 'weekly' ? 'weekly_' : 'monthly_';
+        var maxNum = 0;
+        for (var i = 0; i < items.length; i++) { var num = parseInt(items[i].id.replace(prefix, ''), 10) || 0; if (num > maxNum) maxNum = num; }
+        await App.api('/api/journal/library', { method: 'PUT', body: JSON.stringify({ id: prefix + (maxNum + 1), title: title, body: body, start_date: startDate || '', end_date: endDate || '' }) });
+    }
+
+    async function manualSaveToLibrary() {
+        var status = document.getElementById('manual-status');
+        var title = document.getElementById('manual-title').value.trim();
+        var body = document.getElementById('manual-body').value;
+        var type = document.getElementById('manual-type').value;
+        var s = document.getElementById('manual-start').value;
+        var e = document.getElementById('manual-end').value;
+        if (!title || !body) { status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> 请填写标题和内容</span>'; return; }
+        if (body.length < 200) { status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> 正文至少200字（当前' + body.length + '字）</span>'; return; }
+        status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 保存中...';
+        try {
+            await saveToLibrary(title, body, type, s, e);
+            loadLibrary(true);
+            status.innerHTML = '<span style="color:#27ae60"><i class="fa-solid fa-circle-check"></i> 已保存到素材库!</span>';
+        } catch (e) { status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(e.message) + '</span>'; }
+    }
+
+    /* ---- 提交记录（本地记录） ---- */
+    async function loadSubmittedList() {
+        var c = document.getElementById('submitted-list');
+        c.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>';
+        try {
+            var resp = await App.api('/api/journal/records');
+            if (!resp.success) { c.innerHTML = '<div class="empty-state"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(resp.message) + '</div>'; return; }
+            var records = resp.records || [];
+            if (!records.length) { c.innerHTML = '<div class="empty-state"><i class="fa-solid fa-folder-open"></i> 暂无提交记录</div>'; return; }
+            var html = '';
+            for (var i = 0; i < records.length; i++) {
+                var r = records[i];
+                var badge = r.success ? '<span class="badge badge-success">成功</span>' : '<span class="badge badge-danger">失败</span>';
+                html += '<div class="record-item"><div class="record-header"><span class="record-title">' + App.escapeHtml(r.title || '无标题') + '</span>' + badge + '</div>' +
+                    '<div class="record-meta">' + App.formatDate(r.timestamp) + ' | ' + (r.type === 'weekly' ? '周记' : '月记') + ' | ' +
+                    App.escapeHtml(r.start_date || '') + ' ~ ' + App.escapeHtml(r.end_date || '') + '</div>' +
+                    '<div class="record-body">' + App.escapeHtml((r.body || '').substring(0, 150)) + '</div>' +
+                    (r.error ? '<div class="record-error"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(r.error) + '</div>' : '') + '</div>';
+            }
+            c.innerHTML = html;
+        } catch (e) { c.innerHTML = '<div class="empty-state"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(e.message) + '</div>'; }
+    }
+
+    /* ---- 最近已提交预览（全部记录，网格布局，摘要10个非空格字符） ---- */
+    /* ---- 最近已提交预览（全部记录，网格布局） ---- */
+    async function loadRecentSubmitted(force) {
+        force = force || false;  // 默认不强制刷新（使用缓存）
+        var status = document.getElementById('manual-status');
+        var container = document.getElementById('recent-submitted');
+        var gridEl = document.getElementById('recent-grid');
+        var type = document.getElementById('manual-type').value;
+        var blogType = type === 'monthly' ? '2' : '1';
+        if (type !== 'weekly' && type !== 'monthly') {
+            status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> 类型选择错误</span>';
+            return;
+        }
+
+        container.style.display = 'block';
+        gridEl.innerHTML = '<div class="text-center text-muted" style="font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>';
+
+        try {
+            // 构建 URL，若 force 为 true 则带上 force=1 参数
+            var url = '/api/journal/list?page=1&blog_type=' + blogType;
+            if (force) url += '&force=1';
+            var resp = await App.api(url);
+
+            if (!resp.success) {
+                gridEl.innerHTML = '<div class="text-center text-danger" style="font-size:0.8rem">加载失败: ' + App.escapeHtml(resp.message) + '</div>';
+                return;
+            }
+            var items = (resp.data && resp.data.list) || [];
+            if (!items.length) {
+                container.style.display = 'none';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < items.length; i++) {
+                var r = items[i];
+                // 提取正文前30个非空格字符
+                var plainText = (r.blogBody || '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '');
+                var cleanText = plainText.replace(/\s/g, '');
+                var excerpt = cleanText.substring(0, 30);
+                if (cleanText.length > 30) excerpt += '......';
+                html += '<div class="lib-card">' +
+                    '<div class="lib-title">' + App.escapeHtml(r.blogTitle || '无标题') + '</div>' +
+                    '<div class="lib-dates">' + App.escapeHtml(r.startDate || '') + ' ~ ' + App.escapeHtml(r.endDate || '') + '</div>' +
+                    '<div class="lib-body">' + App.escapeHtml(excerpt) + '</div>' +
+                    (r.blogReviewed == 1 ? '<span class="badge badge-success lib-status">已审</span>' : '<span class="badge badge-warning lib-status">待审</span>') +
+                    '</div>';
+            }
+            gridEl.innerHTML = html;
+        } catch (e) {
+            gridEl.innerHTML = '<div class="text-center text-danger" style="font-size:0.8rem">加载异常</div>';
+        }
+    }
+
+    /* ---- 初始化 ---- */
+    loadLibrary();
+    updateCharCount();
+</script>
+{% endblock %}

@@ -1,0 +1,19 @@
+# Web 框架
+Flask>=3.0.0
+flask-cors>=4.0.0
+
+# 认证
+bcrypt>=4.1.0
+PyJWT>=2.8.0
+
+# HTTP 请求（core 模块依赖）
+requests>=2.31.0
+
+# SM2 国密加密（core 模块依赖）
+gmssl>=3.2.2
+
+# WSGI 服务器
+waitress>=3.0.0
+
+# 图片处理（拍照签到预览）
+Pillow>=10.0.0

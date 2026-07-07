@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 通用现代浏览器 -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/logo/logo.svg">
+    <!-- 兼容老旧浏览器 -->
+    <link rel="shortcut icon" href="/static/logo/logo.svg" type="image/x-icon">
+    <!-- 苹果设备 (iOS) 主屏幕图标 -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/logo/logo.svg">
+    <!-- Windows 8/10 磁贴图标 -->
+    <meta name="msapplication-square310x310logo" content="/static/logo/logo.svg">
+    <meta property="og:title" content="实习数据管理系统">
+    <meta property="og:image" content="https://naokuo.top/static/logo/logo.svg">
+    <meta property="og:url" content="https://naokuo.top">
+    <title>{% block title %}实习数据管理系统{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/icons/fontawesome-free-7.2.0-web/css/all.min.css">
+    <style>
+        /* ---- 侧边栏 (和纸肌理 + 暖玫瑰) ---- */
+        .sidebar {
+            width: var(--sidebar-w);
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            background: hsl(0 0% 98% / .8);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            border-right: 1px solid rgba(212, 96, 112, 0.08);
+        }
+
+        .sidebar-brand {
+            padding: 1.6rem 1.2rem 1.1rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(212, 96, 112, 0.08);
+        }
+
+        .sidebar-brand h4 {
+            color: var(--ink);
+            font-size: 1rem;
+            margin: 0;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-brand h4 i {
+            font-size: 0.9rem;
+            color: var(--rose);
+        }
+
+        .sidebar-brand small {
+            color: var(--rose);
+            font-size: 0.66rem;
+            letter-spacing: 1.5px;
+            opacity: 0.8;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 0.5rem 0;
+        }
+
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.6rem 1.2rem;
+            margin: 2px 8px;
+            color: var(--slate);
+            font-size: 0.86rem;
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all var(--transition);
+        }
+
+        .sidebar-nav a i {
+            width: 18px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .sidebar-nav a:hover {
+            background: rgba(212, 96, 112, 0.06);
+            color: var(--rose-dark);
+            text-decoration: none;
+        }
+
+        .sidebar-nav a.active {
+            background: linear-gradient(135deg, var(--rose), var(--rose-dark));
+            color: #fff;
+            font-weight: 500;
+            box-shadow: 0 4px 14px rgba(212, 96, 112, 0.25);
+        }
+
+        .sidebar-footer {
+            padding: 0.7rem 1.2rem;
+            border-top: 1px solid rgba(212, 96, 112, 0.08);
+        }
+
+        .sidebar-footer .btn {
+            width: 100%;
+            justify-content: center;
+            color: var(--slate);
+            border-color: rgba(212, 96, 112, 0.15);
+            background: transparent;
+        }
+
+        .sidebar-footer .btn:hover {
+            color: var(--rose-dark);
+            border-color: rgba(212, 96, 112, 0.25);
+            background: rgba(212, 96, 112, 0.05);
+        }
+
+        /* ---- 顶栏 (毛玻璃) ---- */
+        .topbar {
+            height: var(--topbar-h);
+            z-index: 999;
+            background: rgba(255, 250, 245, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-bottom: 1px solid rgba(255, 182, 193, 0.15);
+            position: fixed;
+            top: 0;
+            left: var(--sidebar-w);
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+        }
+
+        .topbar-title {
+            font-weight: 500;
+            font-size: 0.95rem;
+            color: var(--ink);
+            letter-spacing: 0.3px;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .topbar-right .user-badge {
+            font-size: 0.8rem;
+            color: var(--slate);
+        }
+
+        .topbar-right .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            display: inline-block;
+            margin-right: 0.3rem;
+            box-shadow: 0 0 8px rgba(126, 214, 135, 0.35);
+        }
+
+        .main {
+            margin-left: var(--sidebar-w);
+            padding-top: var(--topbar-h);
+            min-height: 100vh;
+        }
+
+        .content {
+            padding: 1.5rem;
+        }
+
+        .mobile-toggle {
+            display: none;
+            position: fixed;
+            top: 0.6rem;
+            left: 0.6rem;
+            z-index: 2000;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main,
+            .topbar {
+                margin-left: 0;
+                left: 0;
+            }
+
+            .mobile-toggle {
+                display: block;
+            }
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+
+<body>
+    <a href="#main-content" class="skip-link">跳转到主内容</a>
+    <button class="mobile-toggle btn btn-outline" onclick="document.querySelector('.sidebar').classList.toggle('open')"
+        aria-label="打开菜单"><i class="fa-solid fa-bars"></i></button>
+
+    <nav class="sidebar" role="navigation" aria-label="主导航">
+        <div class="sidebar-brand">
+            <h4><i class="fa-solid fa-server" aria-hidden="true"></i> 实习数据管理系统</h4>
+            <small>RECORD · TRACK · REPORT</small>
+        </div>
+        <div class="sidebar-nav">
+            {% set current = request.path %}
+            <a href="/admin/dashboard" class="{{ 'active' if current.startswith('/admin/dashboard') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/dashboard') else 'false' }}"><i
+                    class="fa-solid fa-chart-pie" aria-hidden="true"></i>仪表板</a>
+            <a href="/admin/config" class="{{ 'active' if current.startswith('/admin/config') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/config') and not current.startswith('/admin/config/view') else 'false' }}"><i
+                    class="fa-solid fa-sliders" aria-hidden="true"></i>配置管理</a>
+            <a href="/admin/config/view" class="{{ 'active' if current.startswith('/admin/config/view') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/config/view') else 'false' }}"><i
+                    class="fa-solid fa-file-code" aria-hidden="true"></i>配置查看</a>
+            <a href="/admin/records" class="{{ 'active' if current.startswith('/admin/records') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/records') else 'false' }}"><i
+                    class="fa-solid fa-clipboard-list" aria-hidden="true"></i>签到记录</a>
+            <a href="/admin/logs" class="{{ 'active' if current.startswith('/admin/logs') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/logs') else 'false' }}"><i
+                    class="fa-solid fa-scroll" aria-hidden="true"></i>系统日志</a>
+            <a href="/admin/requests" class="{{ 'active' if current.startswith('/admin/requests') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/requests') else 'false' }}"><i
+                    class="fa-solid fa-network-wired" aria-hidden="true"></i>请求日志</a>
+            <a href="/admin/journal" class="{{ 'active' if current.startswith('/admin/journal') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/journal') else 'false' }}"><i
+                    class="fa-solid fa-book-open" aria-hidden="true"></i>周记管理</a>
+            <a href="/admin/supplementary" class="{{ 'active' if current.startswith('/admin/supplementary') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/supplementary') else 'false' }}">
+                <i class="fa-solid fa-user-clock" aria-hidden="true"></i>签到管理</a>
+            <a href="/admin/map" class="{{ 'active' if current.startswith('/admin/map') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/map') else 'false' }}"><i
+                    class="fa-solid fa-map-location-dot" aria-hidden="true"></i> 打卡轨迹</a>
+            <a href="/admin/backups" class="{{ 'active' if current.startswith('/admin/backups') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/backups') else 'false' }}"><i
+                    class="fa-solid fa-box-archive" aria-hidden="true"></i>备份管理</a>
+            <a href="/admin/security" class="{{ 'active' if current.startswith('/admin/security') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/security') else 'false' }}"><i
+                    class="fa-solid fa-shield-halved" aria-hidden="true"></i>账户安全</a>
+            <a href="/admin/about" class="{{ 'active' if current.startswith('/admin/about') }}"
+                aria-current="{{ 'page' if current.startswith('/admin/about') else 'false' }}"><i
+                    class="fa-solid fa-circle-info" aria-hidden="true"></i>关于</a>
+        </div>
+        <div class="sidebar-footer">
+            <button class="btn btn-outline btn-sm" onclick="logout()"><i class="fa-solid fa-right-from-bracket"
+                    aria-hidden="true"></i> 退出登录</button>
+        </div>
+    </nav>
+
+    <header class="topbar">
+        <div class="topbar-title">{% block page_title %}仪表板{% endblock %}</div>
+        <div class="topbar-right">
+            <span class="user-badge"><span class="status-dot" aria-label="系统运行中"></span>admin</span>
+        </div>
+    </header>
+
+    <main class="main" id="main-content">
+        <div class="content">{% block content %}{% endblock %}</div>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        /* ---- 页面离场过渡 ---- */
+        (function () {
+            var leaving = false;
+            document.addEventListener('click', function (e) {
+                var a = e.target.closest('a');
+                if (!a || a.getAttribute('target') === '_blank' || a.getAttribute('download') ||
+                    a.hostname !== location.hostname || a.pathname === location.pathname ||
+                    a.hasAttribute('onclick') || (a.classList.contains('btn') && a.getAttribute('href') === '#')) return;
+                if (leaving) return;
+                e.preventDefault();
+                leaving = true;
+                var content = document.querySelector('.content');
+                content.style.opacity = '0';
+                content.style.transform = 'translateY(6px)';
+                content.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                setTimeout(function () { location.href = a.href; }, 180);
+            });
+        })();
+
+        async function logout() {
+            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { }
+            window.location.href = '/login';
+        }
+
+        const Validator = {
+            /** 日期格式 YYYY.MM.DD */
+            isDateDot: (str) => /^\d{4}\.\d{2}\.\d{2}$/.test(str),
+            /** 日期格式 YYYY-MM-DD */
+            isDateDash: (str) => /^\d{4}-\d{2}-\d{2}$/.test(str),
+            /** 时间格式 HH:MM（24小时制） */
+            isTime: (str) => /^([01]\d|2[0-3]):[0-5]\d$/.test(str),
+            /** 整数范围 */
+            isIntInRange: (val, min, max) => {
+                const num = parseInt(val, 10);
+                return !isNaN(num) && num >= min && num <= max;
+            },
+            /** 浮点数范围 */
+            isFloatInRange: (val, min, max) => {
+                const num = parseFloat(val);
+                return !isNaN(num) && num >= min && num <= max;
+            },
+            /** 字符串最小长度 */
+            hasMinLen: (str, len) => typeof str === 'string' && str.trim().length >= len,
+            /** 日期范围校验（start <= end），日期格式为 YYYY.MM.DD 或 YYYY-MM-DD */
+            isDateRangeValid: (start, end) => {
+                const s = new Date(start.replace(/\./g, '-'));
+                const e = new Date(end.replace(/\./g, '-'));
+                return !isNaN(s.getTime()) && !isNaN(e.getTime()) && s <= e;
+            },
+            /** 经纬度有效性 */
+            isLng: (val) => Validator.isFloatInRange(val, -180, 180),
+            isLat: (val) => Validator.isFloatInRange(val, -90, 90),
+        };
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

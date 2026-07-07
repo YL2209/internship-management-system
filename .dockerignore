@@ -1,0 +1,73 @@
+# ============================================================
+# Docker 构建忽略文件 — 安全 + 体积优化
+# ============================================================
+
+# Python 编译缓存
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# 虚拟环境和包管理
+.venv/
+venv/
+env/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+
+# IDE 和编辑器 (不进镜像)
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# 文档 (不进镜像)
+README.md
+*.md
+LICENSE
+!.workbuddy/
+
+# 环境文件 (敏感)
+.env
+.env.*
+!.env.example
+
+# 运行时数据 (通过 volume 挂载)
+cache/
+logs/
+backups/
+*.log
+*.jsonl
+*.bak
+*.bak2
+cache/.session_cache.json
+.schedule_state.json
+
+# 测试文件
+tests/
+.pytest_cache/
+
+# 备份项目 (不进镜像)
+*.backup.*/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Docker (避免递归)
+.dockerignore
+Dockerfile
+docker-compose*.yml
+web/Dockerfile
+
+api-doc/

@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}备份管理{% endblock %}
+{% block page_title %}<i class="fa-solid fa-box-archive"></i> 备份管理{% endblock %}
+{% block head %}
+<style>
+    .toggle-slider {
+        position: relative; display: inline-block; width: 40px; height: 22px;
+        background: var(--divider); border-radius: 11px; transition: background 0.25s; vertical-align: middle;
+    }
+    .toggle-slider::after {
+        content: ''; position: absolute; width: 18px; height: 18px; top: 2px; left: 2px;
+        background: white; border-radius: 50%; transition: transform 0.25s;
+    }
+    input:checked + .toggle-slider { background: var(--rose); }
+    input:checked + .toggle-slider::after { transform: translateX(18px); }
+    #auto-backup-body.disabled { opacity: 0.45; pointer-events: none; }
+
+    /* 移动端卡片布局替代表格 */
+    .backup-list { display: flex; flex-direction: column; gap: 8px; }
+    .backup-item {
+        background: rgba(255,255,255,0.8); border-radius: 12px; padding: 14px;
+        border: 1px solid rgba(255,182,193,0.15);
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        transition: background 0.2s;
+    }
+    .backup-item:active { background: rgba(255,228,225,0.2); }
+    .backup-name { flex: 2; min-width: 120px; font-family: var(--font-mono); font-size: 0.82rem; }
+    .backup-meta { flex: 1; min-width: 80px; font-size: 0.8rem; color: var(--slate); }
+    .backup-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+    .backup-actions .btn { font-size: 0.75rem; padding: 4px 8px; }
+
+    @media (max-width: 768px) {
+        .backup-item { flex-direction: column; align-items: flex-start; }
+        .backup-name { min-width: auto; }
+        .backup-meta { width: 100%; }
+        .backup-actions { width: 100%; justify-content: flex-end; }
+    }
+
+    /* 弹窗内容滚动优化 */
+    .modal-body { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+
+    .backup-info { flex: 1; min-width: 0; }
+    .backup-remark {
+        font-size: 0.72rem; color: var(--slate); margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        max-width: 100%;
+    }
+</style>
+{% endblock %}
+{% block content %}
+
+<!-- 自动备份设置 -->
+<div class="card mb-2">
+    <div class="card-header flex justify-between">
+        <div class="flex gap-2 align-center">
+            <span><i class="fa-solid fa-clock"></i> 自动备份设置</span>
+            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.8rem;">
+                <input type="checkbox" id="auto-backup-toggle" onchange="toggleAutoBackupView()" style="display:none">
+                <span class="toggle-slider"></span>
+                <span id="auto-backup-status-label">已关闭</span>
+            </label>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="showSaveAutoBackup()"><i class="fa-solid fa-floppy-disk"></i> 保存设置</button>
+    </div>
+    <div class="card-body" id="auto-backup-body">
+        <small class="text-muted d-block mb-2"><i class="fa-solid fa-circle-info"></i> 定时自动备份 config.json 到 backups/ 目录，自动清理超出上限的旧备份。</small>
+        <div class="grid-2 mb-2">
+            <div class="form-group">
+                <label class="form-label">备份间隔 (小时)</label>
+                <input type="number" class="form-control" id="auto-backup-interval" min="1" max="720" placeholder="24">
+            </div>
+            <div class="form-group">
+                <label class="form-label">最大备份数</label>
+                <input type="number" class="form-control" id="auto-backup-max" min="1" max="365" placeholder="30">
+            </div>
+        </div>
+        <div id="auto-backup-alert"></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header flex justify-between">
+        <span>配置备份列表</span>
+        <button class="btn btn-primary btn-sm" onclick="backupNow()">＋ 创建备份</button>
+    </div>
+    <div class="card-body" id="backupListContainer">
+        <div class="backup-list" id="backupList">
+            <div class="text-center text-muted p-3">加载中...</div>
+        </div>
+    </div>
+</div>
+
+<!-- 差异对比弹窗 -->
+<div class="modal-overlay hidden" id="diffModal">
+    <div class="modal-box modal-lg">
+        <div class="modal-header"><h5>配置差异对比</h5><button class="btn btn-sm btn-outline" onclick="App.modalClose('diffModal')"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="modal-body" id="diffBody" style="max-height:450px;overflow-y:auto"></div>
+        <div class="modal-footer"><button class="btn btn-outline" onclick="App.modalClose('diffModal')">关闭</button></div>
+    </div>
+</div>
+
+<!-- 恢复确认弹窗 -->
+<div class="modal-overlay hidden" id="restoreModal">
+    <div class="modal-box">
+        <div class="modal-header"><h5>确认恢复</h5><button class="btn btn-sm btn-outline" onclick="App.modalClose('restoreModal')"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="modal-body">
+            <p class="mb-3" id="restoreMsg">确定要从备份恢复配置吗？</p>
+            <div class="form-group"><label class="form-label">管理员密码</label><input type="password" class="form-control" id="restorePwd"></div>
+            <div id="restoreAlert" class="mt-2"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="App.modalClose('restoreModal')">取消</button>
+            <button class="btn btn-primary" id="restoreBtn" onclick="confirmRestore()">确认恢复</button>
+        </div>
+    </div>
+</div>
+
+<!-- 查看备份内容弹窗 -->
+<div class="modal-overlay hidden" id="viewModal">
+    <div class="modal-box modal-lg">
+        <div class="modal-header"><h5>备份内容</h5><button class="btn btn-sm btn-outline" onclick="App.modalClose('viewModal')"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="modal-body" id="viewBody" style="max-height:500px;overflow-y:auto"></div>
+        <div class="modal-footer"><button class="btn btn-outline" onclick="App.modalClose('viewModal')">关闭</button></div>
+    </div>
+</div>
+
+<!-- 创建备份弹窗 -->
+<div class="modal-overlay hidden" id="backupModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h5>创建备份</h5><button class="btn btn-sm btn-outline" onclick="App.modalClose('backupModal')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group"><label class="form-label">备份备注（可选）</label><input type="text" class="form-control" id="backupRemark" placeholder="例如：修改了签到时间"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="App.modalClose('backupModal')">取消</button>
+            <button class="btn btn-primary" onclick="confirmBackup()">确认备份</button>
+        </div>
+    </div>
+</div>
+
+<!-- 自动备份保存密码弹窗 -->
+<div class="modal-overlay hidden" id="autoBackupSaveModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h5>保存自动备份设置</h5>
+            <button class="btn btn-sm btn-outline" onclick="App.modalClose('autoBackupSaveModal')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">管理员密码</label>
+                <input type="password" class="form-control" id="auto-backup-pwd">
+            </div>
+            <div id="auto-backup-save-alert" class="mt-2"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="App.modalClose('autoBackupSaveModal')">取消</button>
+            <button class="btn btn-primary" onclick="confirmSaveAutoBackup()">确认保存</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function backupNow() {
+    document.getElementById('backupRemark').value = '';
+    App.modalOpen('backupModal');
+}
+async function confirmBackup() {
+    var remark = document.getElementById('backupRemark').value.trim();
+    var body = remark ? JSON.stringify({ remark: remark }) : '{}';
+    var d = await App.api('/api/config/backup', { method: 'POST', body: body });
+    App.modalClose('backupModal');
+    App.toast(d.success ? '<i class="fa-solid fa-circle-check"></i> ' + d.message : d.message, d.success ? 'success' : 'danger');
+    loadList();
+}
+async function loadList() {
+    var data = await App.api('/api/config/backups');
+    var list = document.getElementById('backupList');
+    if (!data.backups || !data.backups.length) {
+        list.innerHTML = '<div class="text-center text-muted p-3">暂无备份</div>';
+        return;
+    }
+    list.innerHTML = data.backups.map(function(b){
+        let remarkHtml = b.remark ? `<div class="backup-remark">${App.escapeHtml(b.remark)}</div>` : '';
+        return `<div class="backup-item">
+            <div class="backup-info">
+                <div class="backup-name">${App.escapeHtml(b.filename)}</div>
+                <div class="backup-meta">${(b.size/1024).toFixed(1)}KB &middot; ${b.mtime}</div>
+                ${remarkHtml}
+            </div>
+            <div class="backup-actions">
+                <button class="btn btn-outline btn-sm" onclick="viewBackup('${b.filename}')">查看</button>
+                <button class="btn btn-outline btn-sm" onclick="compareBackup('${b.filename}')">对比</button>
+                <button class="btn btn-outline btn-sm" onclick="showRestoreModal('${b.filename}')">恢复</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteBackup('${b.filename}')">删除</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+async function compareBackup(fname) {
+    var data = await App.api('/api/config/backups/compare', {method:'POST', body:JSON.stringify({filename:fname})});
+    var body = document.getElementById('diffBody');
+    if (!data.diff||!data.diff.length) { body.innerHTML='<p class="text-success"><i class="fa-solid fa-circle-check"></i> 配置与备份完全一致</p>'; }
+    else { body.innerHTML = data.diff.map(function(d){
+        return '<div class="mb-2 p-2 rounded" style="background:'+(d.type==='changed'?'var(--yellow-light)':d.type==='added'?'var(--green-light)':'var(--red-light)')+'"><strong>'+d.path+'</strong> <span class="badge">'+d.type+'</span>'+
+            (d.old!==undefined?'<br><small class="text-danger">- '+JSON.stringify(d.old)+'</small>':'')+
+            (d.new!==undefined?'<br><small class="text-success">+ '+JSON.stringify(d.new)+'</small>':'')+
+            (d.value!==undefined?'<br><small>'+JSON.stringify(d.value)+'</small>':'')+'</div>';
+    }).join(''); }
+    App.modalOpen('diffModal');
+}
+async function viewBackup(fname) {
+    var data = await App.api('/api/config/backups/'+fname);
+    var body = document.getElementById('viewBody');
+    if (!data.success) { body.innerHTML='<p class="text-danger">'+App.escapeHtml(data.message)+'</p>'; }
+    else { body.innerHTML = '<pre class="p-3 rounded" style="background:var(--bg);font-size:0.78rem;white-space:pre-wrap;word-break:break-all">'+App.escapeHtml(JSON.stringify(data.content, null, 2))+'</pre>'; }
+    App.modalOpen('viewModal');
+}
+var restoreFilename = '';
+function showRestoreModal(fname) {
+    restoreFilename = fname;
+    document.getElementById('restoreMsg').textContent = '确定要从 '+fname+' 恢复配置吗？当前配置将被覆盖。';
+    document.getElementById('restorePwd').value = ''; document.getElementById('restoreAlert').innerHTML = '';
+    App.modalOpen('restoreModal');
+}
+async function confirmRestore() {
+    var pw = document.getElementById('restorePwd').value;
+    if (!pw) { document.getElementById('restoreAlert').innerHTML='<div class="alert alert-warning">请输入密码</div>'; return; }
+    var d = await App.api('/api/config/restore', {method:'POST', body:JSON.stringify({password:pw, filename:restoreFilename})});
+    if (d.success) { App.modalClose('restoreModal'); App.toast('<i class="fa-solid fa-circle-check"></i> '+d.message+' 系统将自动重载','success'); }
+    else document.getElementById('restoreAlert').innerHTML='<div class="alert alert-danger">'+d.message+'</div>';
+}
+async function deleteBackup(fname) {
+    if (!confirm('确定删除 '+fname+' ？')) return;
+    var d = await App.api('/api/config/backups/'+fname, {method:'DELETE'});
+    App.toast(d.success?'<i class="fa-solid fa-circle-check"></i> '+d.message:d.message, d.success?'success':'danger'); 
+    loadList();
+}
+// ---- 自动备份设置 ----
+function toggleAutoBackupView() {
+    var cb = document.getElementById('auto-backup-toggle');
+    var body = document.getElementById('auto-backup-body');
+    var label = document.getElementById('auto-backup-status-label');
+    if (cb.checked) {
+        body.classList.remove('disabled');
+        label.textContent = '已开启';
+    } else {
+        body.classList.add('disabled');
+        label.textContent = '已关闭';
+    }
+}
+async function loadAutoBackupConfig() {
+    try {
+        var data = await App.api('/api/config');
+        if (!data.success) return;
+        var ab = (data.config || {}).auto_backup || {};
+        document.getElementById('auto-backup-toggle').checked = ab.enabled !== false;
+        document.getElementById('auto-backup-interval').value = ab.interval_hours || 24;
+        document.getElementById('auto-backup-max').value = ab.max_backups || 30;
+        toggleAutoBackupView();
+    } catch(e) { console.error('加载自动备份配置失败:', e); }
+}
+function showSaveAutoBackup() {
+    document.getElementById('auto-backup-pwd').value = '';
+    document.getElementById('auto-backup-save-alert').innerHTML = '';
+    App.modalOpen('autoBackupSaveModal');
+}
+async function confirmSaveAutoBackup() {
+    var pw = document.getElementById('auto-backup-pwd').value;
+    if (!pw) { document.getElementById('auto-backup-save-alert').innerHTML = '<div class="alert alert-warning">请输入密码</div>'; return; }
+    var value = {
+        enabled: document.getElementById('auto-backup-toggle').checked,
+        interval_hours: parseInt(document.getElementById('auto-backup-interval').value) || 24,
+        max_backups: parseInt(document.getElementById('auto-backup-max').value) || 30
+    };
+    try {
+        var d = await App.api('/api/config/section/auto_backup', {
+            method: 'PUT',
+            body: JSON.stringify({ password: pw, value: value })
+        });
+        if (d.success) {
+            App.modalClose('autoBackupSaveModal');
+            App.toast('<i class="fa-solid fa-circle-check"></i> ' + d.message, 'success');
+        } else {
+            document.getElementById('auto-backup-save-alert').innerHTML = '<div class="alert alert-danger">' + App.escapeHtml(d.message) + '</div>';
+        }
+    } catch(e) {
+        document.getElementById('auto-backup-save-alert').innerHTML = '<div class="alert alert-danger">请求失败: ' + App.escapeHtml(e.message) + '</div>';
+    }
+}
+loadList();
+loadAutoBackupConfig();
+</script>
+{% endblock %}

@@ -1,0 +1,618 @@
+{% extends "base.html" %}
+{% block title %}打卡轨迹地图{% endblock %}
+{% block page_title %}<i class="fa-solid fa-map-location-dot"></i> 打卡轨迹地图{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://map.qq.com">
+<link rel="dns-prefetch" href="https://map.qq.com">
+<style>
+    .map-container {
+        width: 100%;
+        height: 70vh;
+        min-height: 480px;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(255,182,193,0.4);
+        margin-bottom: 16px;
+        position: relative;   /* 为了定位详情卡片 */
+    }
+    .map-info-row {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .map-stat {
+        flex: 1;
+        min-width: 120px;
+        background: rgba(255,250,245,0.9);
+        border-radius: 16px;
+        padding: 16px;
+        text-align: center;
+        border: 1px solid rgba(255,182,193,0.4);
+    }
+    .map-stat .num {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+    .map-stat .label {
+        font-size: 0.8rem;
+        color: var(--slate);
+    }
+
+    /* 图例 */
+    .legend {
+        display: flex;
+        gap: 16px;
+        font-size: 0.8rem;
+        color: var(--slate);
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .legend span::before {
+        content: '';
+        display: inline-block;
+        flex-shrink: 0;
+    }
+    .legend .success::before {
+        width: 12px; height: 12px; border-radius: 50%; background: #00b578;
+    }
+    .legend .fail::before {
+        width: 12px; height: 12px; border-radius: 50%; background: #ff4d4f;
+    }
+    .legend .fence::before {
+        width: 14px; height: 14px; border-radius: 50%;
+        background: rgba(22,119,255,0.2); border: 2px solid #1677ff;
+    }
+
+.point-detail-card {
+    position: absolute;
+    bottom: 50px;
+    left: 16px;
+    right: 16px;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(8px);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+    border: 1px solid rgba(22,119,255,0.3);
+    z-index: 10;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    /* 不再设置 max-height 和 overflow，让内容自然撑开 */
+}
+.close-btn {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    cursor: pointer;
+    color: #888;
+    font-size: 1.2rem;
+}
+#detailContent {
+    max-height: none;          /* 让内容自然撑开，由父级控制滚动 */
+    overflow: visible;
+}
+ /* 关闭按钮样式 */
+.point-detail-card .close-btn {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    cursor: pointer;
+    color: #888;
+    font-size: 1.2rem;
+}
+    .point-detail-card .record-time {
+        font-weight: 600;
+        color: #1a1a2e;
+    }
+    .point-detail-card .record-action {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-weight: 500;
+        margin: 4px 0;
+    }
+    .action-sign_in { background: #e6fff0; color: #00b578; }
+    .action-sign_out { background: #fff2f0; color: #ff4d4f; }
+    .action-supplementary { background: #fffbe6; color: #d48806; }
+    .point-detail-card .record-address {
+        color: #555;
+        word-break: break-all;
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="map-info-row">
+    <div class="map-stat">
+        <div class="num" id="totalCount">0</div>
+        <div class="label">总打卡次数</div>
+    </div>
+    <div class="map-stat">
+        <div class="num" id="successCount">0</div>
+        <div class="label">成功</div>
+    </div>
+    <div class="map-stat">
+        <div class="num" id="failCount">0</div>
+        <div class="label">失败</div>
+    </div>
+    <div class="map-stat">
+        <div class="num" id="insideCount">0</div>
+        <div class="label">围栏内</div>
+    </div>
+    <div class="map-stat">
+        <div class="num" id="farAwayCount">0</div>
+        <div class="label">远处点</div>
+    </div>
+</div>
+
+<div class="legend">
+    <span class="success">成功打卡</span>
+    <span class="fail">失败打卡</span>
+    <span class="fence">电子围栏 (半径{{ map_radius }}m)</span>
+</div>
+
+
+<div id="mapContainer" class="map-container">
+    <!-- 详情浮层 -->
+    <div id="pointDetailCard" class="point-detail-card">
+        <span class="close-btn" onclick="closeDetail()">✕</span>
+        <div id="detailContent"></div>
+    </div>
+</div>
+
+<div style="display:flex; gap:8px; margin-bottom:12px;">
+    <button class="btn btn-outline btn-sm" onclick="loadRecordsAndShow()">
+        <i class="fa-solid fa-rotate"></i> 刷新数据
+    </button>
+    <button class="btn btn-outline btn-sm" onclick="resetMapView()">
+        <i class="fa-solid fa-expand"></i> 重置视角
+    </button>
+    <button class="btn btn-outline btn-sm" onclick="toggleShowAll()" id="btnShowAll">
+        <i class="fa-solid fa-expand"></i> 显示全部
+    </button>
+    <button class="btn btn-outline btn-sm" onclick="toggleMapStyle()" id="btnMapStyle">
+        <i class="fa-solid fa-moon"></i> 夜间
+    </button>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script src="https://map.qq.com/api/gljs?v=1.exp&key={{ tencent_map_key }}"></script>
+<script>
+(function() {
+    const ACTION_CN_MAP = {
+        'sign_in':              '普通签到',
+        'sign_out':             '普通签退',
+        'supplementary_sign_in':'补签签到',
+        'supplementary_sign_out':'补签签退',
+        'photo_sign_in':        '拍照签到',
+        'photo_sign_out':       '拍照签退',
+    };
+
+    let coordMap = new Map();
+    let mapClickHandler = null;
+
+    const FENCE = {
+        centerLat: {{ center_lat }},
+        centerLng: {{ center_lng }},
+        radius: {{ map_radius }},
+    };
+    const INIT_ZOOM = 17;
+    const CLICK_DISTANCE_THRESHOLD = 5; // 米
+    const MAX_VIEW_RADIUS = FENCE.radius * 3; // 视野适配范围：围栏半径的3倍
+    const NIGHT_STYLE_ID = 'style1';
+
+    let map, fenceLayer, markerLayer, centerMarker, highlightMarker;
+    let allRecords = [];
+    let showAllMarkers = false; // 是否显示全部标记视野
+    let mapStyleMode = localStorage.getItem('mapStyleMode') || 'auto'; // auto, day, night
+
+    function getEffectiveStyleId() {
+        if (mapStyleMode === 'night') return NIGHT_STYLE_ID;
+        if (mapStyleMode === 'day') return 'DEFAULT';
+        const hour = new Date().getHours();
+        return (hour >= 18 || hour < 6) ? NIGHT_STYLE_ID : 'DEFAULT';
+    }
+
+    function applyMapStyle(styleId) {
+        if (!map) return;
+        map.setMapStyleId(styleId);
+    }
+
+    function updateStyleButton() {
+        const btn = document.getElementById('btnMapStyle');
+        if (!btn) return;
+        const currentStyle = getEffectiveStyleId();
+        if (currentStyle === NIGHT_STYLE_ID) {
+            btn.innerHTML = '<i class="fa-solid fa-sun"></i> 白天';
+        } else {
+            btn.innerHTML = '<i class="fa-solid fa-moon"></i> 夜间';
+        }
+    }
+
+    function toggleMapStyle() {
+        if (mapStyleMode === 'auto') {
+            const effectiveNow = getEffectiveStyleId();
+            mapStyleMode = effectiveNow === NIGHT_STYLE_ID ? 'day' : 'night';
+        } else if (mapStyleMode === 'night') {
+            mapStyleMode = 'day';
+        } else {
+            mapStyleMode = 'night';
+        }
+        localStorage.setItem('mapStyleMode', mapStyleMode);
+        applyMapStyle(getEffectiveStyleId());
+        updateStyleButton();
+    }
+
+    function initMap() {
+        const center = new TMap.LatLng(FENCE.centerLat, FENCE.centerLng);
+        const mapOptions = { zoom: INIT_ZOOM, center: center, viewMode: '2D' };
+        const styleId = getEffectiveStyleId();
+        if (styleId) mapOptions.mapStyleId = styleId;
+
+        map = new TMap.Map('mapContainer', mapOptions);
+
+        // 电子围栏
+        fenceLayer = new TMap.MultiCircle({
+            map,
+            styles: {
+                'fence': new TMap.CircleStyle({
+                    color: 'rgba(22,119,255,0.08)',
+                    showBorder: true,
+                    borderColor: '#1677ff',
+                    borderWidth: 1,
+                })
+            },
+            geometries: [{ styleId: 'fence', center: center, radius: FENCE.radius }],
+        });
+
+        // 围栏中心标记（高清圆形光晕）
+        centerMarker = new TMap.MultiMarker({
+            map,
+            styles: {
+                'center': new TMap.MarkerStyle({
+                    width: 36, height: 36, anchor: { x: 18, y: 18 },
+                    src: createHighDefCenterIcon(),
+                })
+            },
+            geometries: [{ styleId: 'center', position: center }],
+        });
+
+        new TMap.MultiLabel({
+            map,
+            styles: { 'label': new TMap.LabelStyle({ color: '#1677ff', size: 12, offset: { x: 0, y: -24 } }) },
+            geometries: [{ styleId: 'label', position: center, content: '围栏中心' }],
+        });
+
+        // 打卡记录标记层
+        markerLayer = new TMap.MultiMarker({
+            map,
+            styles: {
+                'success': createMarkerStyle('#00b578', 16),
+                'fail': createMarkerStyle('#ff4d4f', 16),
+            },
+            geometries: [],
+        });
+
+        // 高亮标记层
+        highlightMarker = new TMap.MultiMarker({
+            map,
+            styles: { 'highlight': createHighlightMarkerStyle() },
+            geometries: [],
+        });
+
+        // 底图加载完成后补刷一次标记（避免数据先到而瓦片未就绪导致不显示）
+        map.on('tilesloaded', function onFirstTiles() {
+            map.off('tilesloaded', onFirstTiles);
+            if (allRecords.length > 0) renderMarkers();
+        });
+
+        loadRecordsAndShow();
+        updateStyleButton();
+    }
+
+    // 高清标记点（成功/失败）
+    function createMarkerStyle(color, size) {
+        const dpr = window.devicePixelRatio || 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = size * dpr;
+        canvas.height = size * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const radius = size / 2 - 2;
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        return new TMap.MarkerStyle({
+            width: size, height: size,
+            anchor: { x: size / 2, y: size / 2 },
+            src: canvas.toDataURL(),
+        });
+    }
+
+    // 高清高亮点
+    function createHighlightMarkerStyle() {
+        const dpr = window.devicePixelRatio || 1;
+        const logicalSize = 48;
+        const canvas = document.createElement('canvas');
+        canvas.width = logicalSize * dpr;
+        canvas.height = logicalSize * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const center = logicalSize / 2;
+        ctx.beginPath(); ctx.arc(center, center, 20, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.2)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(center, center, 14, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.4)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(center, center, 8, 0, 2 * Math.PI);
+        ctx.fillStyle = '#FFD700'; ctx.fill();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
+        return new TMap.MarkerStyle({
+            width: logicalSize, height: logicalSize,
+            anchor: { x: center, y: center }, zIndex: 100,
+            src: canvas.toDataURL(),
+        });
+    }
+
+    // 高清围栏中心图标（原风格：蓝圆点+白边+中心白点，圆形光晕）
+    function createHighDefCenterIcon() {
+        const dpr = window.devicePixelRatio || 1;
+        const logicalSize = 36;
+        const canvas = document.createElement('canvas');
+        canvas.width = logicalSize * dpr;
+        canvas.height = logicalSize * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const center = logicalSize / 2;
+
+        // 外层柔光
+        ctx.beginPath(); ctx.arc(center, center, 14, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(22,119,255,0.15)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(center, center, 10, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(22,119,255,0.3)'; ctx.fill();
+
+        // 主体蓝色圆点
+        ctx.beginPath(); ctx.arc(center, center, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = '#1677ff'; ctx.fill();
+
+        // 白边
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+        // 中心白点
+        ctx.beginPath(); ctx.arc(center, center, 2, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff'; ctx.fill();
+
+        return canvas.toDataURL();
+    }
+
+    function buildCoordMap() {
+        coordMap.clear();
+        allRecords.forEach(r => {
+            const lat = parseFloat(r.latitude), lng = parseFloat(r.longitude);
+            if (isNaN(lat) || isNaN(lng)) return;
+            const key = `${lat},${lng}`;
+            if (!coordMap.has(key)) coordMap.set(key, []);
+            coordMap.get(key).push(r);
+        });
+    }
+
+    async function loadRecordsAndShow() {
+        try {
+            const resp = await App.api('/api/records?per_page=999');
+            if (!resp.success || !resp.records) {
+                App.toast('获取记录失败', 'error');
+                return;
+            }
+            allRecords = resp.records;
+            buildCoordMap();
+            updateStats();
+            renderMarkers();
+            closeDetail();
+
+            // 移除旧的点击监听（如果存在）
+            if (mapClickHandler) {
+                map.off('click', mapClickHandler);
+            }
+
+            // 新的点击处理函数
+            mapClickHandler = (evt) => {
+                if (!evt.latLng) return;
+                const clickLat = evt.latLng.getLat();
+                const clickLng = evt.latLng.getLng();
+
+                let minDist = Infinity;
+                let closestKey = null;
+                for (let [key, records] of coordMap.entries()) {
+                    const [lat, lng] = key.split(',').map(Number);
+                    if (isNaN(lat) || isNaN(lng)) continue;
+                    const d = calcDist(clickLat, clickLng, lat, lng);
+                    if (d < minDist) {
+                        minDist = d;
+                        closestKey = key;
+                    }
+                }
+                if (closestKey && minDist <= CLICK_DISTANCE_THRESHOLD) {
+                    const records = coordMap.get(closestKey);
+                    const [lat, lng] = closestKey.split(',').map(Number);
+                    showPointDetail(records, new TMap.LatLng(lat, lng));
+                } else {
+                    closeDetail();
+                }
+            };
+            map.on('click', mapClickHandler);
+
+        } catch (e) {
+            App.toast('加载异常: ' + e.message, 'error');
+        }
+    }
+
+    function updateStats() {
+        const total = allRecords.length;
+        const success = allRecords.filter(r => r.success).length;
+        let inside = 0;
+        let farAway = 0; // 距离围栏中心超过3倍半径的坐标数
+        for (let [key, records] of coordMap.entries()) {
+            const [lat, lng] = key.split(',').map(Number);
+            if (isNaN(lat) || isNaN(lng)) continue;
+            const d = calcDist(lat, lng, FENCE.centerLat, FENCE.centerLng);
+            if (d <= FENCE.radius) inside++;
+            if (d > MAX_VIEW_RADIUS) farAway++;
+        }
+        document.getElementById('totalCount').textContent = total;
+        document.getElementById('successCount').textContent = success;
+        document.getElementById('failCount').textContent = total - success;
+        document.getElementById('insideCount').textContent = inside;
+        // 显示飞点数
+        let farEl = document.getElementById('farAwayCount');
+        if (farEl) farEl.textContent = farAway;
+    }
+
+    function calcDist(lat1, lng1, lat2, lng2) {
+        const R = 6378137.0;  // WGS-84 椭球长半轴，与后端一致
+        const toRad = deg => deg * Math.PI / 180;
+        const dLat = toRad(lat2 - lat1);
+        const dLng = toRad(lng2 - lng1);
+        const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function renderMarkers() {
+        if (!markerLayer) return;
+        const geometries = [];
+        const nearGeometries = []; // 围栏附近的点（用于视野适配）
+        for (let [key, records] of coordMap.entries()) {
+            const [lat, lng] = key.split(',').map(Number);
+            if (isNaN(lat) || isNaN(lng)) continue;
+            const dist = calcDist(lat, lng, FENCE.centerLat, FENCE.centerLng);
+            const styleId = records.some(r => r.success) ? 'success' : 'fail';
+            const geometry = {
+                styleId: styleId,
+                position: new TMap.LatLng(lat, lng),
+            };
+            geometries.push(geometry);
+            if (dist <= MAX_VIEW_RADIUS) {
+                nearGeometries.push(geometry);
+            }
+        }
+        markerLayer.setGeometries(geometries);
+
+        // 根据 showAllMarkers 决定视野
+        if (!showAllMarkers && nearGeometries.length > 0) {
+            const bounds = new TMap.LatLngBounds();
+            nearGeometries.forEach(g => bounds.extend(g.position));
+            map.fitBounds(bounds, { padding: 50 });
+        } else if (geometries.length > 0) {
+            const bounds = new TMap.LatLngBounds();
+            geometries.forEach(g => bounds.extend(g.position));
+            map.fitBounds(bounds, { padding: 50 });
+        } else {
+            map.setCenter(new TMap.LatLng(FENCE.centerLat, FENCE.centerLng));
+            map.setZoom(INIT_ZOOM);
+        }
+    }
+
+    function resetMapView() {
+        map.setCenter(new TMap.LatLng(FENCE.centerLat, FENCE.centerLng));
+        map.setZoom(INIT_ZOOM);
+        closeDetail();
+    }
+
+    // 切换显示全部
+    function toggleShowAll() {
+        showAllMarkers = !showAllMarkers;
+        renderMarkers();
+        const btn = document.getElementById('btnShowAll');
+        if (btn) {
+            btn.innerHTML = showAllMarkers ? '<i class="fa-solid fa-compress"></i> 仅显示附近' : '<i class="fa-solid fa-expand"></i> 显示全部';
+        }
+    }
+
+    // 弹窗显示（只展示最新一条记录，其余用概览提示）
+    function showPointDetail(records, position) {
+        if (highlightMarker) {
+            highlightMarker.setGeometries([{ styleId: 'highlight', position }]);
+        }
+
+        // 按时间戳倒序，取最新一条
+        const sorted = [...records].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+        const latest = sorted[0];
+
+        const actionLabel = ACTION_CN_MAP[latest.action] || latest.action || '';
+        const time = App.formatDate(latest.timestamp) || '';
+        const address = App.escapeHtml(latest.address || '未知地址');
+        const icon = latest.success
+            ? '<i class="fa-solid fa-circle-check" style="color:#27ae60;"></i> 成功'
+            : '<i class="fa-solid fa-circle-xmark" style="color:#e74c3c;"></i> 失败';
+
+        // 计算到围栏中心的距离
+        const distToCenter = calcDist(position.getLat(), position.getLng(), FENCE.centerLat, FENCE.centerLng);
+        let distText = '';
+        if (distToCenter < 1000) {
+            distText = `距离围栏中心 ${Math.round(distToCenter)} 米`;
+        } else {
+            distText = `距离围栏中心 ${(distToCenter / 1000).toFixed(2)} 千米`;
+        }
+
+        let html = `
+            <div class="record-time">${time}</div>
+            <span>${actionLabel}</span> ${icon}
+            <div class="record-address"><i class="fa-solid fa-map-location-dot"></i> ${address}</div>
+            <div style="font-size:0.75rem;color:#888;margin-top:4px;">
+                <i class="fa-solid fa-ruler-combined"></i> ${distText}
+            </div>
+        `;
+
+        if (records.length > 1) {
+            html += `<div style="font-size:0.75rem;color:#888;margin-top:6px;">
+                <i class="fa-solid fa-layer-group"></i> 该位置共 ${records.length} 条打卡记录
+            </div>`;
+        }
+
+        html += `<div style="font-size:0.75rem;color:#888;margin-top:4px;">
+            <i class="fa-solid fa-location-dot"></i> 坐标: ${position.getLat().toFixed(6)}, ${position.getLng().toFixed(6)}
+        </div>`;
+
+        document.getElementById('detailContent').innerHTML = html;
+        document.getElementById('pointDetailCard').style.display = 'block';
+    }
+
+    function closeDetail() {
+        if (highlightMarker) highlightMarker.setGeometries([]);
+        document.getElementById('pointDetailCard').style.display = 'none';
+    }
+
+    window.loadRecordsAndShow = loadRecordsAndShow;
+    window.resetMapView = resetMapView;
+    window.closeDetail = closeDetail;
+    window.toggleShowAll = toggleShowAll;
+    window.toggleMapStyle = toggleMapStyle;
+
+    // 等待腾讯地图 API 加载完成后再初始化
+    (function waitForTMap(retries, maxRetries) {
+        if (typeof TMap !== 'undefined') {
+            initMap();
+            return;
+        }
+        if (retries >= maxRetries) {
+            document.getElementById('mapContainer').innerHTML =
+                '<div style="padding:40px;text-align:center;color:#ff4d4f;">⚠️ 腾讯地图加载超时，请刷新页面重试</div>';
+            return;
+        }
+        setTimeout(function () { waitForTMap(retries + 1, maxRetries); }, 200);
+    })(0, 80);  // 最多等待 80 × 200ms = 16 秒
+})();
+</script>
+{% endblock %}

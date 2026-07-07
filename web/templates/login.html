@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="tencent-map-key" content="{{ tencent_map_key }}">
+    <!-- 通用现代浏览器 -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/logo/logo.svg">
+    <!-- 兼容老旧浏览器 -->
+    <link rel="shortcut icon" href="/static/logo/logo.svg" type="image/x-icon">
+    <!-- 苹果设备 (iOS) 主屏幕图标 -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/logo/logo.svg">
+    <!-- Windows 8/10 磁贴图标 -->
+    <meta name="msapplication-square310x310logo" content="/static/logo/logo.svg">
+    <meta property="og:title" content="实习数据管理系统">
+    <meta property="og:image" content="https://naokuo.top/static/logo/logo.svg">
+    <meta property="og:url" content="https://naokuo.top">
+    <title>实习数据管理系统 — 登录</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/icons/fontawesome-free-7.2.0-web/css/all.min.css">
+    <style>
+        body {
+            display: flex; align-items: center; justify-content: center; min-height: 100vh;
+            /* 圆润渐变 + 噪点 + 呼吸动画 (无纯平底色) */
+            /* background:
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"),
+                radial-gradient(ellipse at 30% 20%, rgba(255,182,193,0.35) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 80%, rgba(255,228,225,0.45) 0%, transparent 60%),
+                linear-gradient(160deg, #FFF0F5 0%, #FFFAF5 40%, #FFF8F0 80%, #FFE4E1 100%); */
+            background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+            background-position: 0% 0%, 30% 20%, 70% 80%, 0% 0%;
+            position: relative; overflow: hidden;
+            animation: loginBgBreath 10s ease-in-out infinite alternate;
+        }
+        @keyframes loginBgBreath {
+            0%   { background-position: 0% 0%, 30% 20%, 70% 80%, 0% 0%; }
+            100% { background-position: 0% 0%, 33% 23%, 68% 77%, 0% 0%; }
+        }
+
+        /* 背景装饰光点 */
+        /* body::before {
+            content: '';
+            position: absolute;
+            width: 200px; height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,182,193,0.15) 0%, transparent 70%);
+            top: -60px; right: -40px;
+            animation: floatGlowA 12s ease-in-out infinite;
+            pointer-events: none;
+        }
+        body::after {
+            content: '';
+            position: absolute;
+            width: 260px; height: 260px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,228,225,0.15) 0%, transparent 70%);
+            bottom: -80px; left: -50px;
+            animation: floatGlowB 14s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes floatGlowA {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50%      { transform: translate(30px, 20px) scale(1.1); }
+        }
+        @keyframes floatGlowB {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50%      { transform: translate(-25px, -30px) scale(1.15); }
+        } */
+
+        .login-wrap { width: 100%; max-width: 400px; padding: 1rem; position: relative; z-index: 1; }
+
+        .login-card {
+            background: rgba(255,255,255,0.75); backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+            padding: 2.5rem 2rem 2rem;
+            border: 1px solid rgba(255,255,255,0.8);
+            animation: loginCardIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+            position: relative; overflow: hidden;
+        }
+        @keyframes loginCardIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.96); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        /* .login-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--rose-light), var(--rose), transparent);
+            animation: topLineShimmer 3s ease-in-out infinite;
+        }
+        @keyframes topLineShimmer {
+            0%, 100% { opacity: 0.6; }
+            50%      { opacity: 1; }
+        } */
+
+        .login-header { text-align: center; margin-bottom: 2rem; }
+        .login-header .logo {
+            width: 56px; height: 56px;
+            background: linear-gradient(135deg, var(--rose-light), var(--rose));
+            border-radius: 16px; display: inline-flex; align-items: center; justify-content: center;
+            margin-bottom: 1rem; box-shadow: 0 4px 20px rgba(212,96,112,0.3);
+            animation: logoBreath 3s ease-in-out infinite;
+        }
+        @keyframes logoBreath {
+            0%, 100% { box-shadow: 0 4px 20px rgba(212,96,112,0.3); transform: scale(1); }
+            50%      { box-shadow: 0 6px 28px rgba(212,96,112,0.45); transform: scale(1.04); }
+        }
+        .login-header .logo i {
+            font-size: 1.4rem; color: #fff;
+            animation: logoSpin 6s linear infinite;
+        }
+        @keyframes logoSpin {
+            from { transform: rotateY(0deg); }
+            to   { transform: rotateY(360deg); }
+        }
+        .login-header h3 {
+            color: var(--ink); font-weight: 500; margin-bottom: 0.3rem; letter-spacing: 0.3px;
+            animation: fadeUpIn 0.5s 0.15s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+        }
+        .login-header p {
+            color: var(--slate); font-size: 0.84rem;
+            animation: fadeUpIn 0.5s 0.25s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+        }
+        @keyframes fadeUpIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-body .form-group { margin-bottom: 1.2rem; }
+        .form-group:nth-child(1) { animation: fadeUpIn 0.5s 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+        .form-group:nth-child(2) { animation: fadeUpIn 0.5s 0.38s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+
+        .btn-login {
+            width: 100%; padding: 0.7rem; font-size: 0.95rem; justify-content: center; border-radius: 20px;
+            animation: fadeUpIn 0.5s 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.45s ease, transform 0.25s ease;
+        }
+        .btn-login:hover:not(:disabled) {
+            box-shadow: 0 8px 28px rgba(212, 96, 112, 0.5);
+            transform: translateY(-2px);
+        }
+        .btn-login:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        .ip-info {
+            text-align: center; font-size: 0.76rem; color: var(--slate); margin-bottom: 1rem; letter-spacing: 0.5px;
+            animation: fadeUpIn 0.5s 0.44s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+        }
+        .ip-info i { font-size: 0.8rem; }
+
+        /* 错误抖动 */
+        .alert-danger {
+            animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 90% { transform: translateX(-4px); }
+            30%, 70% { transform: translateX(4px); }
+            50%      { transform: translateX(-3px); }
+        }
+
+        /* 密码输入框悬停微亮 */
+        #password {
+            transition: all 0.3s ease, box-shadow 0.35s ease;
+        }
+        #password:hover {
+            border-color: var(--rose-light);
+        }
+        #password:focus {
+            border-color: var(--rose-light);
+            box-shadow: 0 0 0 4px rgba(212, 96, 112, 0.06), 0 0 18px rgba(212, 96, 112, 0.08);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrap">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo"><i class="fa-solid fa-server"></i></div>
+                <h3>实习数据管理系统</h3>
+                <p>请输入管理员密码以继续</p>
+            </div>
+            <div class="login-body">
+                <div id="alertBox"></div>
+                <form id="loginForm" autocomplete="off">
+                    <div class="form-group">
+                        <label class="form-label">管理员账号</label>
+                        <input type="text" class="form-control" value="admin" readonly disabled style="opacity:0.45">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="password">密码</label>
+                        <input type="password" class="form-control" id="password" placeholder="管理员密码" required autofocus>
+                    </div>
+                    <div class="ip-info" id="ipInfo"><i class="fa-solid fa-location-dot"></i> 正在获取网络...</div>
+                    <button type="submit" class="btn btn-primary btn-login" id="loginBtn">登 录</button>
+                </form>
+                <p id="lockoutMsg" class="text-danger text-center text-sm mt-2 hidden"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    var publicIp = '';
+    (async function detectIp() {
+        var el = document.getElementById('ipInfo');
+        try {
+            var r3 = await fetch('https://icanhazip.com/', { signal: AbortSignal.timeout(4000) });
+            var ipText = await r3.text();
+            publicIp = ipText.trim();
+            if (publicIp) { el.innerHTML = '<i class=\"fa-solid fa-globe\"></i> ' + publicIp; }
+            else { el.innerHTML = '<i class=\"fa-solid fa-triangle-exclamation\"></i> 无法获取 IP'; }
+        } catch(e) {
+            try {
+                var r2 = await fetch('https://ippubblico.org/?api=1', { signal: AbortSignal.timeout(4000) });
+                var d2 = await r2.json();
+                publicIp = d2.ip || '';
+                el.innerHTML = '<i class=\"fa-solid fa-globe\"></i> ' + (publicIp || '未知');
+            } catch(e2) { el.innerHTML = '<i class=\"fa-solid fa-triangle-exclamation\"></i> 无法获取 IP'; }
+        }
+    })();
+
+    var form = document.getElementById('loginForm'), btn = document.getElementById('loginBtn'),
+        alertBox = document.getElementById('alertBox'), lockoutEl = document.getElementById('lockoutMsg'), lockoutEnd = 0;
+
+    function show(msg, type) { alertBox.innerHTML = '<div class="alert alert-'+type+'">'+msg+'</div>'; }
+
+    function updateLockout() {
+        if (lockoutEnd > Date.now()) {
+            var r = Math.ceil((lockoutEnd-Date.now())/1000);
+            lockoutEl.textContent = '锁住了，'+Math.floor(r/60)+'分'+(r%60)+'秒后再试';
+            lockoutEl.classList.remove('hidden'); btn.disabled = true;
+            setTimeout(updateLockout, 1000);
+        } else { lockoutEl.classList.add('hidden'); btn.disabled = false; lockoutEnd = 0; }
+    }
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault(); if (lockoutEnd > Date.now()) return;
+        var pw = document.getElementById('password').value;
+        if (!pw) { show('请输入密码', 'warning'); return; }
+        btn.disabled = true; btn.textContent = '验证中...'; btn.classList.add('btn-loading');
+        try {
+            var resp = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:pw,public_ip:publicIp}) });
+            var data = await resp.json();
+            if (data.success) {
+                btn.classList.remove('btn-loading');
+                btn.textContent = '登录成功!';
+                btn.style.background = 'linear-gradient(135deg, #7ED687, #6DC577)';
+                show('登录成功', 'success');
+                setTimeout(function(){window.location.href='/admin/dashboard'},500);
+            } else {
+                btn.classList.remove('btn-loading');
+                show(data.message||'登录失败','danger');
+                btn.disabled=false; btn.textContent='登 录';
+                document.getElementById('password').value='';
+                document.getElementById('password').focus();
+                if(resp.status===429){lockoutEnd=Date.now()+300000;updateLockout();}
+            }
+        } catch(err) {
+            btn.classList.remove('btn-loading');
+            show('网络错误: '+err.message,'danger');
+            btn.disabled=false; btn.textContent='登 录';
+        }
+    });
+    </script>
+</body>
+</html>

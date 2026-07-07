@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}账户安全{% endblock %}
+{% block page_title %}<i class="fa-solid fa-shield-halved"></i> 账户安全{% endblock %}
+{% block content %}
+
+<div class="card"><div class="card-header">修改密码</div><div class="card-body">
+    <div class="form-group"><label class="form-label">当前密码</label><input type="password" class="form-control" id="pwdOld"></div>
+    <div class="form-group"><label class="form-label">新密码（至少6位）</label><input type="password" class="form-control" id="pwdNew"></div>
+    <div class="form-group"><label class="form-label">确认新密码</label><input type="password" class="form-control" id="pwdNew2"></div>
+    <div id="pwdAlert"></div>
+    <button class="btn btn-primary mt-2" onclick="changePwd()">修改密码</button>
+</div></div>
+<div class="card"><div class="card-header flex justify-between">
+    <span>登录历史</span><button class="btn btn-danger btn-sm" onclick="clearHistory()">清空</button>
+</div><div class="card-body" id="loginHistory" style="max-height:380px;overflow-y:auto"><p class="text-muted">加载中...</p></div></div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+async function changePwd() {
+    var o=document.getElementById('pwdOld').value, n1=document.getElementById('pwdNew').value, n2=document.getElementById('pwdNew2').value;
+    if(!o){document.getElementById('pwdAlert').innerHTML='<div class="alert alert-warning">请输入当前密码</div>';return;}
+    if(n1.length<6){document.getElementById('pwdAlert').innerHTML='<div class="alert alert-warning">新密码至少6位</div>';return;}
+    if(n1!==n2){document.getElementById('pwdAlert').innerHTML='<div class="alert alert-warning">两次输入不一致</div>';return;}
+    var d=await App.api('/api/auth/change-password',{method:'POST',body:JSON.stringify({old_password:o,new_password:n1})});
+    if(d.success){toast('<i class="fa-solid fa-circle-check"></i> '+d.message);document.getElementById('pwdOld').value=document.getElementById('pwdNew').value=document.getElementById('pwdNew2').value='';}
+    else document.getElementById('pwdAlert').innerHTML='<div class="alert alert-danger">'+d.message+'</div>';
+}
+async function loadHistory() {
+    var d = await App.api('/api/login-history');
+    var div = document.getElementById('loginHistory');
+    if (!d.records || !d.records.length) {
+        div.innerHTML = '<p class="text-muted">暂无登录记录</p>';
+        return;
+    }
+
+    function getLocationText(r) {
+        var loc = r.ip_location || {};
+        var parts = [];
+        if (loc.province) parts.push(loc.province);
+        if (loc.city) parts.push(loc.city);
+        if (loc.district) parts.push(loc.district);
+        return parts.length ? parts.join(' ') : '-';
+    }
+
+    div.innerHTML = '<table><thead><tr><th>时间</th><th>IP</th><th>位置</th><th>UA</th></tr></thead><tbody>' +
+        d.records.map(function(r) {
+            return '<tr>' +
+                '<td class="text-sm">' + App.escapeHtml(r.time || '') + '</td>' +
+                '<td class="text-mono text-sm">' + App.escapeHtml(r.ip || '-') + '</td>' +
+                '<td class="text-sm">' + App.escapeHtml(getLocationText(r)) + '</td>' +
+                '<td class="text-sm truncate" style="max-width:200px" title="' + App.escapeHtml(r.user_agent || '') + '">' +
+                    App.escapeHtml((r.user_agent || '').substring(0, 50)) +
+                '</td>' +
+            '</tr>';
+        }).join('') +
+    '</tbody></table>';
+}
+async function clearHistory(){if(!confirm('确定清空？'))return;var d=await App.api('/api/login-history',{method:'DELETE'});toast(d.success?'<i class="fa-solid fa-circle-check"></i> '+d.message:d.message,d.success?'success':'danger');loadHistory();}
+loadHistory();
+</script>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}签到记录{% endblock %}
+{% block page_title %}<i class="fa-solid fa-clipboard-list"></i> 签到记录{% endblock %}
+{% block content %}
+<div class="card"><div class="card-header flex justify-between flex-wrap gap-2">
+    <span>签到签退记录 （<small class="text-muted" id="recSummary"></small>）</span>
+    <div class="flex gap-1 flex-wrap">
+        <input type="date" class="form-control" id="fStart" style="width:135px" onchange="loadPage(1)" title="开始日期">
+        <input type="date" class="form-control" id="fEnd" style="width:135px" onchange="loadPage(1)" title="结束日期">
+        <select class="form-select" id="fAction" onchange="loadPage(1)" style="width:110px">
+            <option value="">全部类型</option><option value="sign_in">签到</option><option value="sign_out">签退</option>
+        </select>
+        <select class="form-select" id="fSuccess" onchange="loadPage(1)" style="width:100px">
+            <option value="">全部</option><option value="true">成功</option><option value="false">失败</option>
+        </select>
+        <select class="form-select" id="fPerPage" onchange="loadPage(1)" style="width:105px">
+            <option value="10">10条/页</option><option value="20" selected>20条/页</option><option value="50">50条/页</option><option value="100">100条/页</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="loadPage(1)"><i class="fa-solid fa-rotate"></i></button>
+    </div>
+</div>
+<div class="table-wrap"><table>
+    <thead><tr><th>时间</th><th>类型</th><th>状态</th><th>地址（逆地理编码）</th><th>GPS</th><th>设备</th><th>模式</th><th>耗时</th><th>消息</th></tr></thead>
+    <tbody id="recBody"><tr><td colspan="9" class="text-center text-muted p-3">加载中...</td></tr></tbody>
+</table></div>
+<div class="flex justify-between p-2"><small class="text-muted" id="recInfo"></small><div class="flex gap-1" id="recPages"></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+var page = 1;
+
+async function loadPage(p) {
+    page = p || 1;
+    var perPage = document.getElementById('fPerPage').value || 20;
+    var params = new URLSearchParams({
+        page: page, per_page: perPage,
+        start_date: document.getElementById('fStart').value,
+        end_date: document.getElementById('fEnd').value,
+        action: document.getElementById('fAction').value,
+        success: document.getElementById('fSuccess').value
+    });
+
+    var tbody = document.getElementById('recBody');
+    tbody.innerHTML = App.renderLoading(9);
+
+    try {
+        var data = await App.api('/api/records?' + params);
+        if (!data.success) {
+            tbody.innerHTML = App.renderError(9, App.escapeHtml(data.message));
+            return;
+        }
+
+        document.getElementById('recSummary').textContent = '共 ' + data.total + ' 条数据';
+
+        if (!data.records.length) {
+            tbody.innerHTML = App.renderEmpty(9);
+            document.getElementById('recPages').innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML = data.records.map(function (r) {
+            return '<tr>' +
+                '<td class="text-mono text-sm" data-label="时间">' + App.formatDate(r.timestamp) + '</td>' +
+                '<td data-label="类型">' + (r.action === 'sign_in'
+                    ? '<span class="badge badge-info">签到</span>'
+                    : r.action === 'sign_out'
+                        ? '<span class="badge badge-warning">签退</span>'
+                        : r.action === 'supplementary_sign_in'
+                            ? '<span class="badge badge-info">补签到</span>'
+                            : r.action === 'supplementary_sign_out'
+                                ? '<span class="badge badge-warning">补签退</span>'
+                                : r.action === 'photo_sign_in'
+                                   ? '<span class="badge badge-info">拍签到</span>'
+                                   : r.action === 'photo_sign_out'
+                                      ? '<span class="badge badge-warning">拍签退</span>'
+                                      : '-') + '</td>' +
+                '<td data-label="状态">' + (r.success
+                    ? '<span class="badge badge-success">成功</span>'
+                    : '<span class="badge badge-danger">失败</span>') + '</td>' +
+                '<td class="text-sm truncate" style="max-width:180px" title="' + App.escapeHtml(r.address || '') + '" data-label="地址">' +
+                    App.escapeHtml((r.address || '\u2014').substring(0, 30)) + '</td>' +
+                '<td class="text-mono text-sm" data-label="GPS">' + App.escapeHtml(r.latitude || '') + ', ' + App.escapeHtml(r.longitude || '') + '</td>' +
+                '<td class="text-sm" data-label="设备">' + App.escapeHtml(r.device || '-') + '</td>' +
+                '<td class="text-sm" data-label="模式">' + App.escapeHtml(r.auth_mode || '-') + '</td>' +
+                '<td class="text-sm" data-label="耗时">' + (r.elapsed_ms ? (r.elapsed_ms / 1000).toFixed(1) + 's' : '-') + '</td>' +
+                '<td class="text-sm truncate" style="max-width:140px" title="' + App.escapeHtml(r.message || '') + '" data-label="消息">' +
+                    App.escapeHtml((r.message || '').substring(0, 40)) + '</td>' +
+                '</tr>';
+        }).join('');
+
+        App.renderPagination(data, 'recPages', 'recInfo', loadPage);
+
+    } catch (e) {
+        tbody.innerHTML = App.renderError(9, e.message);
+    }
+}
+
+loadPage(1);
+</script>
+{% endblock %}

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实习过程管理系统 — Docker 部署版</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #faf9f8;
+            color: #333;
+        }
+        h1, h2, h3, h4 {
+            color: #d46070;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+        h1 {
+            border-bottom: 2px solid #e0c0c8;
+            padding-bottom: 0.3em;
+        }
+        blockquote {
+            margin: 1em 0;
+            padding: 0.5em 1em;
+            background: #fef3f4;
+            border-left: 4px solid #d46070;
+            color: #555;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #e0e0e0;
+            padding: 1em;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        code {
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            background: #f0e0e5;
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+        }
+        th, td {
+            border: 1px solid #e0c0c8;
+            padding: 0.5em 0.8em;
+            text-align: left;
+        }
+        th {
+            background: #f9e8ec;
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background: #fef9fa;
+        }
+        a {
+            color: #d46070;
+        }
+        ul, ol {
+            padding-left: 2em;
+        }
+        hr {
+            border: none;
+            border-top: 1px solid #e0c0c8;
+            margin: 2em 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 500;
+            margin-right: 4px;
+        }
+        .badge-green { background: #d4edda; color: #155724; }
+        .badge-red { background: #f8d7da; color: #721c24; }
+        .badge-yellow { background: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+
+<h1>实习过程管理系统 — Docker 部署版</h1>
+
+<blockquote>
+    一款轻量级的实习过程数据管理平台，帮助实习生集中记录、查看和分析个人实习经历，支持 Docker 一键部署与 Web 可视化操作。
+</blockquote>
+
+<h2>项目简介</h2>
+
+<p>本系统专为需要管理实习期间各类数据的学生设计，提供<strong>实习日志（周记/月记）撰写与提交</strong>、<strong>考勤记录查询</strong>、<strong>补签申请</strong>、<strong>数据统计概览</strong>等核心功能。无需手动编辑配置文件，所有操作均在浏览器中完成，适合个人或小团队快速搭建私有实习数据仓库。</p>
+
+<p>系统本身不采集或自动生成任何数据，所有数据均需由用户通过官方实习平台获取后录入，或由系统提供辅助提交接口（需用户主动授权）。其核心价值在于将分散的实习过程信息统一归档，方便回顾与导出。</p>
+
+<h2>功能特性</h2>
+
+<ul>
+    <li>✅ <strong>实习日志管理</strong>：在线撰写、修改、提交周记与月记，支持字数统计与素材库保存。</li>
+    <li>✅ <strong>考勤记录查看</strong>：展示历史考勤打卡记录，支持按时间、状态筛选，并提供签到详情、排行榜与补签操作。</li>
+    <li>✅ <strong>签到管理（新版）</strong>：集成普通签到/签退、拍照签到、补签申请、打卡详情查询及月度排行榜。</li>
+    <li>✅ <strong>数据概览</strong>：自动统计日志数量、考勤成功率、近期趋势，并以图表形式呈现。</li>
+    <li>✅ <strong>Web 管理后台</strong>：直观的图形界面，无需命令行操作，所有功能均在浏览器中完成。</li>
+    <li>✅ <strong>用户认证</strong>：内置管理员账号，支持密码修改与登录历史审计，保障数据隐私。</li>
+    <li>✅ <strong>Docker 一键部署</strong>：镜像即开即用，数据持久化存储，支持配置热加载。</li>
+    <li>✅ <strong>智能位置模拟</strong>：支持动态坐标抖动（每日漂移 + 高斯噪声），增强签到行为自然性，降低风控风险。</li>
+    <li>✅ <strong>缓存管理</strong>：内置缓存系统（排行榜、签到详情、周记列表），可独立设置过期时间，提升响应速度。</li>
+</ul>
+
+<h2>快速开始</h2>
+
+<h3>1. 获取项目</h3>
+
+<pre><code>git clone https://github.com/yourusername/internship-management.git
+cd internship-management
+</code></pre>
+
+<h3>2. 准备配置文件</h3>
+
+<p>复制示例配置文件并根据实际情况修改：</p>
+
+<pre><code>cp config.default.json config.json
+</code></pre>
+
+<blockquote>
+    您需要填写实习平台的认证信息（如 <code>openId</code>、<code>unionId</code>、<code>encryptValue</code>、<code>sessionId</code> 等）。这些参数可从实习平台的官方小程序或 Web 端通过合法方式获取。具体获取方法请参考实习平台的技术文档或联系平台管理员。
+</blockquote>
+
+<h3>3. 启动服务</h3>
+
+<p>使用 Docker Compose 一键启动所有服务：</p>
+
+<pre><code>docker compose up -d
+</code></pre>
+
+<p>访问 <code>http://localhost:5000</code> 即可进入 Web 管理后台。</p>
+
+<h3>4. 登录后台</h3>
+
+<ul>
+    <li>默认账号：<code>admin</code></li>
+    <li>默认密码：<code>admin123</code></li>
+</ul>
+
+<p><strong>首次登录后请立即修改密码</strong>（通过 Web 界面右上角的“账户安全”页面）。</p>
+
+<h2>Web 管理后台使用指南</h2>
+
+<h3>仪表盘</h3>
+<ul>
+    <li>显示实习日志总数、考勤记录总数、成功率、定时任务状态等概览信息。</li>
+    <li>展示近 30 天考勤趋势、热力日历、时段分布、周记/月记统计等图表。</li>
+</ul>
+
+<h3>实习日志管理</h3>
+<ul>
+    <li><strong>素材库</strong>：存储已撰写或待提交的周记/月记草稿，支持增删改查，方便复用。</li>
+    <li><strong>提交记录</strong>：查看通过本系统提交至实习平台的日志历史（成功/失败状态）。</li>
+    <li><strong>撰写与提交</strong>：选择周记或月记类型，填写标题、正文、起止日期，提交至实习平台（需配置有效认证信息）。</li>
+</ul>
+
+<h3>签到管理（新版集成）</h3>
+<ul>
+    <li><strong>签到详情</strong>：查看当天打卡状态（签到/签退时间、地址、坐标），并可直接执行普通签到或拍照签到。</li>
+    <li><strong>排行榜</strong>：查看指定月份的实习工时排行榜，支持缓存加速。</li>
+    <li><strong>补签操作</strong>：自动拉取可补签日期，选择日期后自动填充补签类型、地址、随机补签理由，一键提交。</li>
+</ul>
+
+<h3>考勤记录</h3>
+<ul>
+    <li>查看历史考勤打卡记录，支持按日期、类型（签到/签退）、成功/失败筛选。</li>
+    <li>记录包含时间、地址、GPS 坐标、设备信息等详细信息。</li>
+</ul>
+
+<h3>系统配置</h3>
+<ul>
+    <li><strong>认证方式</strong>：支持“自动模式”（使用授权码换取会话）与“手动模式”（直接填写固定参数）。</li>
+    <li><strong>位置与设备</strong>：设置经纬度、地图服务商、设备型号、User‑Agent 等环境参数。</li>
+    <li><strong>位置漂移设置</strong>：可配置每日漂移最小/最大距离（米），以及单次抖动半径，实现动态坐标变化。</li>
+    <li><strong>定时任务</strong>（可选）：可配置签到/签退的自动执行计划，但默认关闭，建议手动操作。</li>
+    <li><strong>缓存控制</strong>：可独立设置排行榜、签到详情、周记列表的缓存过期时间。</li>
+</ul>
+
+<h3>账户安全</h3>
+<ul>
+    <li>修改管理员密码。</li>
+    <li>查看登录历史（含 IP 与地理位置）。</li>
+</ul>
+
+<h3>备份管理</h3>
+<ul>
+    <li>手动创建配置备份，支持备注、查看、对比、恢复与删除。</li>
+    <li>支持自动备份（可配置间隔与保留数量）。</li>
+</ul>
+
+<h3>缓存管理</h3>
+<ul>
+    <li>查看各缓存（排行榜、签到详情、周记列表）的统计信息、条目详情及实际数据。</li>
+</ul>
+
+<h2>配置说明</h2>
+
+<p>系统通过 <code>config.json</code> 进行核心配置，部分敏感参数可通过 <code>.env</code> 环境变量覆盖。以下为常用字段说明：</p>
+
+<table>
+    <thead>
+        <tr><th>字段</th><th>说明</th><th>默认值</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><code>auth_mode</code></td><td>认证模式：<code>"auto"</code>（自动登录，需提供 <code>code</code>）或 <code>"manual"</code>（手动模式，需填写固定参数）</td><td><code>"manual"</code></td></tr>
+        <tr><td><code>code</code></td><td>授权码（自动模式使用）</td><td><code>""</code></td></tr>
+        <tr><td><code>openId</code> / <code>unionId</code></td><td>用户标识（手动模式必填）</td><td><code>""</code></td></tr>
+        <tr><td><code>encryptValue</code> / <code>sessionId</code></td><td>会话凭证（手动模式必填，通常有效期为 24 小时）</td><td><code>""</code></td></tr>
+        <tr><td><code>location</code></td><td>经纬度（用于考勤打卡定位）</td><td><code>{"latitude":"39.916527","longitude":"116.397128"}</code></td></tr>
+        <tr><td><code>locationJitterMeters</code></td><td>单次高斯抖动的最大半径（米）</td><td><code>100</code></td></tr>
+        <tr><td><code>dailyDriftMinMeters</code></td><td>每日基准点漂移的最小距离（米）</td><td><code>5</code></td></tr>
+        <tr><td><code>dailyDriftMaxMeters</code></td><td>每日基准点漂移的最大距离（米）</td><td><code>10</code></td></tr>
+        <tr><td><code>device</code></td><td>设备信息（品牌、型号、系统、平台）</td><td>示例值</td></tr>
+        <tr><td><code>userAgent</code></td><td>模拟的 User‑Agent 头</td><td>微信小程序 UA</td></tr>
+        <tr><td><code>schedule</code></td><td>定时任务配置（默认关闭）</td><td><code>{"enabled": false, ...}</code></td></tr>
+        <tr><td><code>auto_backup</code></td><td>自动备份策略</td><td><code>{"enabled": false, ...}</code></td></tr>
+        <tr><td><code>cache_ttl</code></td><td>通用缓存过期时间（秒）</td><td><code>86400</code></td></tr>
+        <tr><td><code>cache_ttl_ranking</code></td><td>排行榜缓存过期时间（秒）</td><td><code>3600</code></td></tr>
+        <tr><td><code>cache_ttl_clock_detail</code></td><td>签到详情缓存过期时间（秒）</td><td><code>7200</code></td></tr>
+        <tr><td><code>cache_ttl_journal_list</code></td><td>周记列表缓存过期时间（秒）</td><td><code>43200</code></td></tr>
+    </tbody>
+</table>
+
+<blockquote>
+    <strong>注意</strong>：<code>sessionId</code> 等凭证具有时效性，过期后需重新获取并更新配置。获取方式请参考所使用实习平台的官方开发者文档。
+</blockquote>
+
+<h2>Docker 部署详解</h2>
+
+<h3>环境变量（<code>.env</code>）</h3>
+
+<table>
+    <thead>
+        <tr><th>变量名</th><th>说明</th><th>默认值</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><code>WEB_PORT</code></td><td>Web 服务宿主机映射端口</td><td><code>5000</code></td></tr>
+        <tr><td><code>ADMIN_PASSWORD</code></td><td>管理员明文密码（首次启动自动哈希）</td><td>必填</td></tr>
+        <tr><td><code>JWT_SECRET</code></td><td>JWT 签名密钥（生产环境应设置）</td><td>随机生成</td></tr>
+        <tr><td><code>LOG_LEVEL</code></td><td>日志级别（DEBUG/INFO/WARNING/ERROR）</td><td><code>INFO</code></td></tr>
+        <tr><td><code>TZ</code></td><td>时区</td><td><code>Asia/Shanghai</code></td></tr>
+    </tbody>
+</table>
+
+<h3>常用命令</h3>
+
+<pre><code># 启动所有服务（守护进程 + Web）
+docker compose up -d
+
+# 查看日志
+docker compose logs -f
+
+# 停止服务
+docker compose down
+
+# 修改配置后重启
+docker compose restart
+</code></pre>
+
+<h3>数据持久化</h3>
+
+<p>以下目录通过 Docker Volume 挂载，容器重启或升级不会丢失数据：</p>
+<ul>
+    <li><code>./config.json</code> — 配置文件（读写）</li>
+    <li><code>./cache</code> — 会话缓存</li>
+    <li><code>./logs</code> — 日志文件</li>
+    <li><code>./backups</code> — 配置备份</li>
+    <li><code>./journals</code> — 周记/月记素材库</li>
+</ul>
+
+<h2>目录结构</h2>
+
+<pre><code>internship-management/
+├── core/                     # 核心业务模块
+│   ├── signer.py             # 考勤客户端（登录、打卡、逆地理编码）
+│   ├── scheduler.py          # 定时调度引擎（可选）
+│   ├── journal.py            # 周记/月记管理
+│   ├── supplementary_clock.py # 补签管理
+│   ├── photo_sign.py         # 拍照签到模块
+│   └── location.py           # 坐标抖动与逆地理工具
+├── web/                      # Web 管理后台
+│   ├── app.py                # Flask 主程序
+│   ├── auth.py               # 认证模块（JWT + bcrypt + 速率限制）
+│   ├── config_manager.py     # 配置安全读写
+│   ├── cache.py              # 缓存管理模块
+│   ├── templates/            # HTML 模板
+│   └── static/               # 静态资源（CSS/JS/图标）
+├── config.json               # 主配置文件
+├── config.default.json       # 配置模板
+├── docker-compose.yml        # Docker Compose 编排
+├── Dockerfile                # 守护进程镜像
+├── entrypoint.sh             # 容器入口脚本
+├── run.py                    # 命令行入口（单次/守护进程）
+├── requirements.txt          # Python 依赖
+└── README.md                 # 本文档
+</code></pre>
+
+<h2>风控规避说明</h2>
+
+<p>部分实习平台会通过规则引擎检测自动化行为（如异常 IP、规律性坐标、重复设备指纹等），以下为本系统内置的规避措施及用户应注意事项：</p>
+
+<h3>✅ 已内置的防护措施</h3>
+
+<table>
+    <thead>
+        <tr><th>风控规则</th><th>防护方式</th><th>效果</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>签到地址异常规律</strong></td>
+            <td>每日基准点漂移 + 高斯抖动，每次签到坐标随机偏移（可配置半径）</td>
+            <td>避免坐标完全重复，模拟真实 GPS 误差</td>
+        </tr>
+        <tr>
+            <td><strong>签到设备异常</strong></td>
+            <td>设备信息、User‑Agent 固定填写（与抓包一致）</td>
+            <td>避免频繁切换设备导致风控</td>
+        </tr>
+        <tr>
+            <td><strong>时间规律性</strong></td>
+            <td>定时任务支持 <code>random_window</code> 随机偏移（如 ±10 分钟）</td>
+            <td>避免每天同一秒打卡</td>
+        </tr>
+        <tr>
+            <td><strong>会话凭证复用</strong></td>
+            <td>支持缓存会话凭证（24 小时有效），减少频繁登录</td>
+            <td>降低因登录触发的异常检测</td>
+        </tr>
+        <tr>
+            <td><strong>拍照图片防护</strong></td>
+            <td>上传图片自动清除 EXIF 信息（GPS、拍摄时间等），防止隐私泄露</td>
+            <td>防止图片携带真实位置信息</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>⚠️ 用户需自行注意的高风险项</h3>
+
+<ol>
+    <li>
+        <p><strong>IP 身份异常</strong><br>
+        若将本系统部署在云服务器上，IP 会被识别为机房/IDC IP，<strong>极易触发风控</strong>。<br>
+        <strong>建议</strong>：<br>
+        - 使用家庭宽带、4G/5G 手机热点等<strong>住宅 IP</strong> 出口<br>
+        - 或通过合规的住宅代理服务转发签到请求</p>
+    </li>
+    <li>
+        <p><strong>外勤地址超范围 / 连续外勤</strong><br>
+        签到坐标不应长期大幅偏离实习单位设定的打卡范围（通常为地理围栏）。<br>
+        <strong>建议</strong>：<br>
+        - 将配置中的 <code>location</code> 经纬度填写在单位围栏内<br>
+        - <code>locationJitterMeters</code> 抖动半径保持合理值（建议 ≤ 200 米）</p>
+    </li>
+    <li>
+        <p><strong>签到图片重复使用</strong>（适用于拍照签到）<br>
+        如果启用拍照签到功能，<strong>切勿重复使用同一张照片</strong>，否则会被识别为“签到图片重复使用”。<br>
+        <strong>建议</strong>：<br>
+        - 每次使用不同的真实照片<br>
+        - 或对照片进行轻微调整（裁剪、亮度微调等）</p>
+    </li>
+    <li>
+        <p><strong>凭证时效管理</strong><br>
+        <code>sessionId</code> 等凭证存在有效期（通常 24 小时），过期后系统会自动清除缓存并提示重新获取。请及时更新配置，避免因凭证失效导致操作失败。</p>
+    </li>
+</ol>
+
+<h3>📋 风控规则对照表</h3>
+
+<table>
+    <thead>
+        <tr><th>规则</th><th>状态</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>IP身份/用途异常</td><td><span class="badge badge-red">🔴 高风险</span></td><td>必须使用住宅 IP，避免云服务器直连</td></tr>
+        <tr><td>签到地址异常规律</td><td><span class="badge badge-green">🟢 已规避</span></td><td>每日漂移 + 高斯抖动</td></tr>
+        <tr><td>连续3天外勤签到</td><td><span class="badge badge-green">🟢 已规避</span></td><td>锚点需在围栏内</td></tr>
+        <tr><td>外勤地址超正常范围</td><td><span class="badge badge-green">🟢 已规避</span></td><td>不频繁大幅修改锚点</td></tr>
+        <tr><td>签到图片重复使用</td><td><span class="badge badge-yellow">🟡 可配置</span></td><td>若启用拍照签到，需自行保证图片不重复</td></tr>
+        <tr><td>签到设备异常</td><td><span class="badge badge-green">🟢 已规避</span></td><td>设备指纹固定</td></tr>
+        <tr><td>IP聚合签到异常</td><td><span class="badge badge-red">🔴 高风险</span></td><td>必须使用独立 IP，避免共享</td></tr>
+    </tbody>
+</table>
+
+<h2>注意事项</h2>
+
+<ul>
+    <li><strong>认证凭证</strong>：<code>sessionId</code> 等参数具有时效性（通常 24 小时），过期后需更新配置。请妥善保管，避免泄露。</li>
+    <li><strong>位置数据</strong>：GPS 坐标用于考勤打卡，可启用随机抖动（<code>locationJitterMeters</code>、<code>dailyDriftMin/Max</code>）以模拟真实场景，但应控制在合理范围内（默认最大 500 米）。</li>
+    <li><strong>设备信息</strong>：<code>device</code> 和 <code>userAgent</code> 需与实习平台环境匹配，否则可能导致请求被拒。</li>
+    <li><strong>定时任务</strong>：该功能默认关闭，启用后需确保认证凭证长期有效，否则任务将失败。建议仅在有持续有效会话的情况下使用。</li>
+    <li><strong>安全建议</strong>：生产环境务必修改默认管理员密码，并设置 <code>JWT_SECRET</code> 为强随机字符串。</li>
+    <li><strong>图片隐私</strong>：拍照签到上传的图片会经过去除 EXIF 处理，不会保留拍摄位置等隐私信息。</li>
+</ul>
+
+<h2>开发与扩展</h2>
+
+<p>如需本地开发运行（非 Docker）：</p>
+
+<pre><code>pip install -r requirements.txt
+python run.py --once sign_in   # 示例单次操作
+python web/app.py              # 启动 Web 服务（调试模式）
+</code></pre>
+
+<h2>开源许可</h2>
+
+<p>MIT License</p>
+
+<hr>
+
+<p><strong>祝您实习管理轻松高效！</strong> 如有问题，欢迎提交 Issue 或 Pull Request。</p>
+
+</body>
+</html>

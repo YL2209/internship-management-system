@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}系统日志{% endblock %}
+{% block page_title %}<i class="fa-solid fa-scroll"></i> 系统日志{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-header flex justify-between flex-wrap gap-2">
+        <span>系统日志 (<small class="text-muted" id="logSummary"></small>) </span>
+        <div class="flex gap-1 flex-wrap">
+            <input type="date" class="form-control" id="fStart" style="width:135px" onchange="loadPage(1)">
+            <input type="date" class="form-control" id="fEnd" style="width:135px" onchange="loadPage(1)">
+            <select class="form-select" id="fLevel" onchange="loadPage(1)" style="width:90px">
+                <option value="">全部</option>
+                <option value="INFO">INFO</option>
+                <option value="WARNING">WARNING</option>
+                <option value="ERROR">ERROR</option>
+            </select>
+            <select class="form-select" id="fPerPage" onchange="loadPage(1)" style="width:105px">
+                <option value="10">10条/页</option>
+                <option value="20" selected>20条/页</option>
+                <option value="50">50条/页</option>
+                <option value="100">100条/页</option>
+            </select>
+            <input type="text" class="form-control" id="fSearch" placeholder="搜索..." style="width:140px"
+                onkeydown="if(event.key==='Enter')loadPage(1)">
+            <button class="btn btn-outline btn-sm" onclick="loadPage(1)"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:160px">时间</th>
+                    <th style="width:70px">级别</th>
+                    <th>消息</th>
+                </tr>
+            </thead>
+            <tbody id="logBody">
+                <tr>
+                    <td colspan="3" class="text-center text-muted p-3">加载中...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="flex justify-between p-2"><small class="text-muted" id="logInfo"></small>
+        <div class="flex gap-1" id="logPages"></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+var page = 1;
+
+function lvBadge(l) {
+    return l === 'ERROR' ? '<span class="badge badge-danger">ERROR</span>'
+        : l === 'WARNING' ? '<span class="badge badge-warning">WARN</span>'
+        : '<span class="badge badge-success">INFO</span>';
+}
+
+async function loadPage(p) {
+    page = p || 1;
+    var perPage = document.getElementById('fPerPage').value || 20;
+    var params = new URLSearchParams({
+        page: page,
+        per_page: perPage,
+        start_date: document.getElementById('fStart').value,
+        end_date: document.getElementById('fEnd').value,
+        level: document.getElementById('fLevel').value,
+        search: document.getElementById('fSearch').value
+    });
+    var data = await App.api('/api/logs/sign?' + params);
+    if (!data.success) {
+        document.getElementById('logBody').innerHTML = '<tr><td colspan="3" class="text-center text-danger p-3">' + App.escapeHtml(data.message) + '</td></tr>';
+        return;
+    }
+    document.getElementById('logSummary').textContent = '共 ' + data.total + ' 条数据';
+    var tbody = document.getElementById('logBody');
+    if (!data.logs.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted p-3">暂无日志</td></tr>';
+    } else {
+        tbody.innerHTML = data.logs.map(function (r) {
+            return '<tr><td class="text-mono text-sm">' + App.escapeHtml(r.timestamp || '') + '</td>' +
+                '<td>' + lvBadge(r.level) + '</td>' +
+                '<td class="text-sm" style="word-break:break-all">' + App.escapeHtml(r.message || r.raw || '') + '</td></tr>';
+        }).join('');
+    }
+
+    // 使用共享分页组件
+    App.renderPagination(data, 'logPages', 'logInfo', loadPage);
+}
+
+loadPage(1);
+</script>
+{% endblock %}

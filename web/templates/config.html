@@ -1,0 +1,623 @@
+{% extends "base.html" %}
+{% block title %}配置管理{% endblock %}
+{% block page_title %}<i class="fa-solid fa-sliders"></i> 配置管理{% endblock %}
+{% block head %}
+<style>
+    .toggle-slider {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 22px;
+        background: var(--divider);
+        border-radius: 11px;
+        transition: background 0.25s;
+        vertical-align: middle;
+    }
+
+    .toggle-slider::after {
+        content: '';
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        top: 2px;
+        left: 2px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.25s;
+    }
+
+    #cfg-schedule-enabled:checked+.toggle-slider {
+        background: var(--rose);
+    }
+
+    #cfg-schedule-enabled:checked+.toggle-slider::after {
+        transform: translateX(18px);
+    }
+
+    #schedule-body {
+        transition: opacity 0.2s;
+    }
+
+    #schedule-body.disabled {
+        opacity: 0.45;
+        pointer-events: none;
+    }
+
+    /* 隐藏 checkbox 但保留 DOM 结构（相邻选择器依然有效） */
+    .weekday-check {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+        /* 避免干扰点击，让 label 完全控制 */
+    }
+
+    /* 选中时的背景色 */
+    .weekday-check:checked+span {
+        background: #D46070;
+        border-radius: 4px;
+        padding: 0.1rem 0.3rem;
+        color: #ffffff;
+    }
+
+    /* 未选中时的背景色（直接给 span 加默认样式） */
+    .weekday-badge span {
+        background: #f2f0ef;
+        border-radius: 4px;
+        padding: 0.1rem 0.3rem;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="flex justify-between mb-3 flex-wrap gap-2">
+    <div class="flex gap-1 flex-wrap">
+        <a href="/admin/backups" class="btn btn-outline btn-sm"><i class="fa-solid fa-download"></i> 备份管理</a>
+        <button class="btn btn-outline btn-sm" onclick="backupNow()"><i class="fa-solid fa-floppy-disk"></i>
+            快速备份</button>
+        <button class="btn btn-outline btn-sm" onclick="resetDefaultConfirm()"><i class="fa-solid fa-rotate"></i>
+            恢复默认</button>
+    </div>
+    <div class="flex gap-1">
+        <button class="btn btn-outline btn-sm" id="btnTestSignIn" onclick="testSign('sign_in')"><i
+                class="fa-solid fa-flask"></i> 测试签到</button>
+        <button class="btn btn-outline btn-sm" id="btnTestSignOut" onclick="testSign('sign_out')"><i
+                class="fa-solid fa-flask"></i> 测试签退</button>
+        <button class="btn btn-primary" onclick="saveConfig()"><i class="fa-solid fa-floppy-disk"></i> 保存配置</button>
+    </div>
+</div>
+<div id="configAlert"></div>
+
+<!-- 测试结果展示 -->
+<div id="testResultArea" class="hidden mb-3">
+    <div class="card" id="testResultCard">
+        <div class="card-body py-3" id="testResultBody"></div>
+    </div>
+</div>
+
+<!-- 认证模式 -->
+<div class="card mb-2">
+    <div class="card-header">认证方式</div>
+    <div class="card-body">
+        <div class="form-group">
+            <div class="grid-2">
+                <div>
+                    <label class="form-label">认证模式</label>
+                    <select class="form-select" id="cfg-auth_mode" onchange="toggleAuthMode()">
+                        <option value="auto">auto — 自动登录（使用 code）</option>
+                        <option value="manual">manual — 手动模式（设置参数）</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div id="autoFields">
+            <div class="form-group"><label class="form-label">code（微信 OAuth 授权码）</label>
+                <div class="flex gap-2">
+                    <input type="text" class="form-control mono" id="cfg-code" style="flex:1" placeholder="有效期 5 分钟">
+                    <button class="btn btn-primary btn-sm" onclick="wechatLogin()" title="使用当前 code 换取 JSESSIONID 并缓存">
+                        <i class="fa-solid fa-rotate"></i> 小程序登录
+                    </button>
+                </div>
+                <small class="text-muted d-block mt-1">
+                    <i class="fa-solid fa-circle-info"></i> code 仅 5 分钟有效，填入后请立即点击「小程序登录」
+                </small>
+            </div>
+        </div>
+        <div id="manualFields" class="hidden">
+            <div class="grid-2">
+                <div class="form-group"><label class="form-label">openId</label>
+                    <input type="text" class="form-control mono" id="cfg-openId" placeholder="有效期很久">
+                </div>
+                <div class="form-group"><label class="form-label">unionId</label>
+                    <input type="text" class="form-control mono" id="cfg-unionId" placeholder="有效期很久">
+                </div>
+                <div class="form-group"><label class="form-label">encryptValue</label>
+                    <input type="text" class="form-control mono" id="cfg-encryptValue" placeholder="有效期 1 小时">
+                </div>
+                <div class="form-group"><label class="form-label">sessionId (JSESSIONID)</label>
+                    <input type="text" class="form-control mono" id="cfg-sessionId" placeholder="有效期 1 小时">
+                </div>
+            </div>
+        </div>
+        <hr>
+        <div class="grid-3">
+            <div class="form-group"><label class="form-label">缓存过期 (秒，默认24小时)</label>
+                <input type="number" class="form-control" id="cfg-sessionExpireSeconds" placeholder="auto 模式下生效">
+            </div>
+            <!-- 缓存独立过期时间 -->
+                <div class="form-group">
+                    <label class="form-label">排行榜缓存 TTL (秒)</label>
+                    <input type="number" class="form-control" id="cfg-cache_ttl_ranking" min="60" step="1" placeholder="默认 1 小时">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">签到详情缓存 TTL (秒)</label>
+                    <input type="number" class="form-control" id="cfg-cache_ttl_clock_detail" min="60" step="1" placeholder="默认 2 小时">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">周记列表缓存 TTL (秒)</label>
+                    <input type="number" class="form-control" id="cfg-cache_ttl_journal_list" min="60" step="1" placeholder="默认 12 小时">
+                </div>
+            <div class="form-group"><label class="form-label">请求超时 (秒)</label>
+                <input type="number" class="form-control" id="cfg-requestTimeout" placeholder="默认 10 秒">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 位置与设备 -->
+<div class="card mb-2">
+    <div class="card-header">位置与设备</div>
+    <div class="card-body">
+        <small class="text-muted d-block mb-2"><i class="fa-solid fa-circle-info"></i> 经纬度尽量选择在签到地点中心，<a
+                href="https://lbs.qq.com/getPoint" target="_blank" rel="noopener noreferrer"><i
+                    class="fa-solid fa-map"></i> 打开腾讯坐标拾取</a></small>
+        <div class="grid-3 mb-2">
+            <div class="form-group"><label class="form-label">经度</label><input type="number" step="any"
+                    class="form-control" id="cfg-location-longitude" placeholder="经度"></div>
+            <div class="form-group"><label class="form-label">纬度</label><input type="number" step="any"
+                    class="form-control" id="cfg-location-latitude" placeholder="纬度"></div>
+            <div class="form-group"><label class="form-label">抖动半径 (米)</label><input type="number" class="form-control"
+                    id="cfg-locationJitterMeters" placeholder="签到地点范围"></div>
+        </div>
+        <!-- 每日漂移设置 -->
+        <div class="grid-3 mb-2">
+            <div class="form-group">
+                <label class="form-label">每日漂移最小距离 (米)</label>
+                <input type="number" class="form-control" id="cfg-dailyDriftMinMeters" min="1" max="400" step="1" placeholder="上限 400 米">
+                <small class="text-muted">漂移+抖动半径 不大于 签到范围</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">每日漂移最大距离 (米)</label>
+                <input type="number" class="form-control" id="cfg-dailyDriftMaxMeters" min="1" max="400" step="1" placeholder="上限 400 米">
+                <small class="text-muted">漂移+抖动半径 不大于 签到范围</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">电子围栏半径 (米)</label>
+                <input type="number" class="form-control" id="cfg-map_radius" min="50" max="5000" step="10" placeholder="500">
+                <small class="text-muted">用于地图打卡轨迹的围栏范围，默认500米</small>
+            </div>
+        </div>
+        <div class="grid-3 mb-2">
+            <div class="form-group"><label class="form-label">地图服务商</label><select class="form-select"
+                    id="cfg-mapProvider">
+                    <option value="amap">高德</option>
+                    <option value="tencent">腾讯</option>
+                </select></div>
+            <div class="form-group"><label class="form-label">高德 Key</label><input type="text" class="form-control"
+                    id="cfg-mapApiKeys-amap"></div>
+            <div class="form-group"><label class="form-label">腾讯 Key</label><input type="text" class="form-control"
+                    id="cfg-mapApiKeys-tencent"></div>
+        </div>
+
+        <small class="text-muted d-block mb-2">
+            <i class="fa-solid fa-circle-info"></i>
+            获取beand(品牌)、deviceName(型号)、system(系统)、platform(平台)、User-Agent
+        </small>
+        <div class="grid-3 mb-2">
+            <div class="form-group"><label class="form-label">品牌</label><input type="text" class="form-control"
+                    id="cfg-device-brand" placeholder="beand"></div>
+            <div class="form-group"><label class="form-label">型号</label><input type="text" class="form-control"
+                    id="cfg-device-model" placeholder="deviceName"></div>
+            <div class="form-group"><label class="form-label">系统</label><input type="text" class="form-control"
+                    id="cfg-device-system" placeholder="system"></div>
+            <div class="form-group"><label class="form-label">平台</label><select class="form-select"
+                    id="cfg-device-platform">
+                    <option value="android">android</option>
+                    <option value="ios">ios</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group"><label class="form-label">User-Agent</label><textarea class="form-control mono"
+                id="cfg-userAgent" rows="2" style="font-size:0.8rem;resize:vertical"
+                placeholder="请输入 User-Agent，例如：Mozilla/5.0..."></textarea></div>
+    </div>
+</div>
+
+<!-- 定时任务 -->
+<div class="card mb-2">
+    <div class="card-header flex justify-between">
+        <div class="flex gap-2 align-center">
+            <span>定时任务（测试）</span>
+            <label class="toggle-container"
+                style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.8rem;">
+                <input type="checkbox" id="cfg-schedule-enabled" onchange="toggleScheduleView()" style="display:none">
+                <span class="toggle-slider"></span>
+                <span id="schedule-status-label">已关闭</span>
+            </label>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addTask()">＋ 添加</button>
+    </div>
+    <div class="card-body" id="schedule-body">
+        <small class="text-muted d-block mb-2"><i class="fa-solid fa-circle-info"></i> 由于 sessionId (JSESSIONID) 有效期可能只有
+            1 个小时，所以这个功能基本没啥用</small>
+        <div class="mb-2"><label class="form-label">工作日</label>
+            <div class="flex gap-1 flex-wrap" id="cfg-workdays"></div>
+        </div>
+        <div class="grid-2 mb-2">
+            <div class="form-group"><label class="form-label">重试间隔 (秒)</label><input type="number" class="form-control"
+                    id="cfg-retryIntervalSeconds"></div>
+            <div class="form-group"><label class="form-label">最大重试次数</label><input type="number" class="form-control"
+                    id="cfg-maxRetries"></div>
+        </div>
+        <div id="taskList"></div>
+    </div>
+</div>
+
+<!-- 备份备注弹窗 -->
+<div class="modal-overlay hidden" id="backupModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h5>快速备份</h5><button class="btn btn-sm btn-outline"
+                onclick="document.getElementById('backupModal').classList.add('hidden')"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group"><label class="form-label">备份备注（可选）</label><input type="text" class="form-control"
+                    id="backupRemark" placeholder="例如：修改了签到时间"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline"
+                onclick="document.getElementById('backupModal').classList.add('hidden')">取消</button>
+            <button class="btn btn-primary" onclick="confirmBackup()">确认备份</button>
+        </div>
+    </div>
+</div>
+
+<!-- 恢复默认确认弹窗 -->
+<div class="modal-overlay hidden" id="resetDefaultModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h5>恢复默认配置</h5><button class="btn btn-sm btn-outline"
+                onclick="document.getElementById('resetDefaultModal').classList.add('hidden')"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <p class="mb-3 text-danger"><i class="fa-solid fa-triangle-exclamation"></i> 当前配置将被默认配置覆盖，建议先备份。</p>
+            <div class="form-group"><label class="form-label">管理员密码</label><input type="password" class="form-control"
+                    id="resetDefaultPwd"></div>
+            <div id="resetDefaultAlert" class="mt-2"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline"
+                onclick="document.getElementById('resetDefaultModal').classList.add('hidden')">取消</button>
+            <button class="btn btn-danger" onclick="confirmResetDefault()">确认恢复</button>
+        </div>
+    </div>
+</div>
+
+<!-- 保存密码弹窗 -->
+<div class="modal-overlay hidden" id="saveModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h5>确认保存</h5><button class="btn btn-sm btn-outline"
+                onclick="document.getElementById('saveModal').classList.add('hidden')"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group"><label class="form-label">管理员密码</label><input type="password" class="form-control"
+                    id="savePassword"></div>
+            <div id="saveAlert"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline"
+                onclick="document.getElementById('saveModal').classList.add('hidden')">取消</button>
+            <button class="btn btn-primary" onclick="confirmSave()">确认保存</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    var currentConfig = {};
+    function toggleAuthMode() {
+        document.getElementById('autoFields').classList.toggle('hidden', document.getElementById('cfg-auth_mode').value !== 'auto');
+        document.getElementById('manualFields').classList.toggle('hidden', document.getElementById('cfg-auth_mode').value !== 'manual');
+    }
+    function toggleScheduleView() {
+        var cb = document.getElementById('cfg-schedule-enabled');
+        var body = document.getElementById('schedule-body');
+        var label = document.getElementById('schedule-status-label');
+        if (cb.checked) {
+            body.classList.remove('disabled');
+            label.textContent = '已开启';
+        } else {
+            body.classList.add('disabled');
+            label.textContent = '已关闭';
+        }
+    }
+    async function loadConfig() {
+        var data = await App.api('/api/config');
+        if (!data.success) return;
+        currentConfig = data.config;
+        document.getElementById('cfg-auth_mode').value = currentConfig.auth_mode || 'auto';
+        document.getElementById('cfg-code').value = currentConfig.code || '';
+        document.getElementById('cfg-openId').value = currentConfig.openId || '';
+        document.getElementById('cfg-unionId').value = currentConfig.unionId || '';
+        document.getElementById('cfg-encryptValue').value = currentConfig.encryptValue || '';
+        document.getElementById('cfg-sessionId').value = currentConfig.sessionId || '';
+        document.getElementById('cfg-sessionExpireSeconds').value = (currentConfig.sessionExpireSeconds != null) ? currentConfig.sessionExpireSeconds : 86400;
+        document.getElementById('cfg-cache_ttl_ranking').value = (currentConfig.cache_ttl_ranking != null) ? currentConfig.cache_ttl_ranking : 3600;
+        document.getElementById('cfg-cache_ttl_clock_detail').value = (currentConfig.cache_ttl_clock_detail != null) ? currentConfig.cache_ttl_clock_detail : 7200;
+        document.getElementById('cfg-cache_ttl_journal_list').value = (currentConfig.cache_ttl_journal_list != null) ? currentConfig.cache_ttl_journal_list : 43200;
+        document.getElementById('cfg-requestTimeout').value = (currentConfig.requestTimeout != null) ? currentConfig.requestTimeout : 10;
+        toggleAuthMode();
+        var loc = currentConfig.location || {};
+        document.getElementById('cfg-location-longitude').value = loc.longitude || '';
+        document.getElementById('cfg-location-latitude').value = loc.latitude || '';
+        document.getElementById('cfg-locationJitterMeters').value = (currentConfig.locationJitterMeters != null) ? currentConfig.locationJitterMeters : 100;
+        document.getElementById('cfg-dailyDriftMinMeters').value = (currentConfig.dailyDriftMinMeters != null) ? currentConfig.dailyDriftMinMeters : 10;
+        document.getElementById('cfg-dailyDriftMaxMeters').value = (currentConfig.dailyDriftMaxMeters != null) ? currentConfig.dailyDriftMaxMeters : 100;
+        document.getElementById('cfg-map_radius').value = (currentConfig.map_radius != null) ? currentConfig.map_radius : 500;
+        document.getElementById('cfg-mapProvider').value = currentConfig.mapProvider || 'amap';
+        var keys = currentConfig.mapApiKeys || {};
+        document.getElementById('cfg-mapApiKeys-amap').value = keys.amap || '';
+        document.getElementById('cfg-mapApiKeys-tencent').value = keys.tencent || '';
+        var dev = currentConfig.device || {};
+        document.getElementById('cfg-device-brand').value = dev.brand || '';
+        document.getElementById('cfg-device-model').value = dev.model || '';
+        document.getElementById('cfg-device-system').value = dev.system || '';
+        document.getElementById('cfg-device-platform').value = dev.platform || 'android';
+        document.getElementById('cfg-userAgent').value = currentConfig.userAgent || '';
+        renderTasks();
+        var sch = currentConfig.schedule || {};
+        document.getElementById('cfg-schedule-enabled').checked = sch.enabled !== false;
+        toggleScheduleView();
+        document.getElementById('cfg-retryIntervalSeconds').value = sch.retryIntervalSeconds || 300;
+        document.getElementById('cfg-maxRetries').value = sch.maxRetries || 3;
+        renderWorkdays(sch.workdays || [1, 2, 3, 4, 5]);
+    }
+
+    async function wechatLogin() {
+        if (!confirm('将清除旧会话缓存，用当前 code 重新登录。确定继续？')) return;
+        var btn = event.target.closest('button');
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 登录中...';
+        try {
+            var code = document.getElementById('cfg-code').value.trim();
+            if (!code) {
+                App.toast('请先输入 code', 'warning');
+                btn.disabled = false;
+                btn.innerHTML = origHTML;
+                return;
+            }
+            var resp = await App.api('/api/auth/wechat-login', {
+                method: 'POST',
+                body: JSON.stringify({ code: code })
+            });
+            if (resp.success) {
+                App.toast('登录成功！认证信息已保存', 'success');
+            } else {
+                App.toast('登录失败: ' + resp.message, 'error');
+            }
+        } catch (e) {
+            App.toast('请求异常: ' + e.message, 'error');
+        }
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+    }
+
+    function renderWorkdays(wds) {
+        var days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        var html = '';
+        for (var i = 0; i < days.length; i++) {
+            var val = i + 1;
+            var checked = wds.includes(val);
+            // 不再内联背景色，改为用 CSS 根据 checked 状态处理
+            html += '<label class="badge weekday-badge" style="cursor:pointer;padding:0.4rem 0.7rem;margin:2px;border-radius:6px;user-select:none">' +
+                '<input type="checkbox" value="' + val + '" ' + (checked ? 'checked' : '') + ' class="weekday-check">' +
+                '<span>' + days[i] + '</span></label>';
+        }
+        document.getElementById('cfg-workdays').innerHTML = html;
+    }
+    function addTask() {
+        if (!currentConfig.schedule) currentConfig.schedule = {};
+        if (!currentConfig.schedule.tasks) currentConfig.schedule.tasks = [];
+        currentConfig.schedule.tasks.push({ time: '09:00:00', action: 'sign_in', tolerance: 60, random_window: 0 });
+        renderTasks();
+    }
+    function removeTask(i) { currentConfig.schedule.tasks.splice(i, 1); renderTasks(); }
+    function renderTasks() {
+        var tasks = (currentConfig.schedule || {}).tasks || [];
+        document.getElementById('taskList').innerHTML = tasks.map(function (t, i) {
+            return '<div class="flex gap-1 align-center mb-1 p-2" style="background:var(--gray-100);border-radius:6px">' +
+                '<span class="badge">#' + (i + 1) + '</span>' +
+                '<input type="time" step="1" class="form-control" style="width:110px" value="' + (t.time || '09:00:00') + '" onchange="currentConfig.schedule.tasks[' + i + '].time=this.value">' +
+                '<select class="form-select" style="width:130px" onchange="currentConfig.schedule.tasks[' + i + '].action=this.value">' +
+                ['sign_in', 'sign_out'].map(function (a) { return '<option value="' + a + '" ' + (t.action === a ? 'selected' : '') + '>' + a + '</option>'; }).join('') + '</select>' +
+                '<input type="number" class="form-control" style="width:70px" placeholder="容差" value="' + (t.tolerance != null ? t.tolerance : 60) + '" onchange="currentConfig.schedule.tasks[' + i + '].tolerance=parseInt(this.value)">' +
+                '<input type="number" class="form-control" style="width:80px" placeholder="随机" value="' + (t.random_window != null ? t.random_window : 0) + '" onchange="currentConfig.schedule.tasks[' + i + '].random_window=parseInt(this.value)">' +
+                '<button class="btn btn-danger btn-sm" onclick="removeTask(' + i + ')"><i class="fa-solid fa-xmark"></i></button></div>';
+        }).join('');
+    }
+    function saveConfig() {
+        const auth_mode = document.getElementById('cfg-auth_mode').value;
+        const code = document.getElementById('cfg-code').value;
+        const openId = document.getElementById('cfg-openId').value;
+        const unionId = document.getElementById('cfg-unionId').value;
+        const encryptValue = document.getElementById('cfg-encryptValue').value;
+        const sessionId = document.getElementById('cfg-sessionId').value;
+
+        if (auth_mode === "auto") {
+            if (!code) {
+                App.toast('请填入code（微信 OAuth 授权码）', 'warning');
+                return;
+            }
+        } else {
+            if (!openId || !unionId || !encryptValue || !sessionId) {
+                App.toast('请填入openId、unionId、encryptValue、sessionId (JSESSIONID)', 'warning');
+                return;
+            }
+        }
+
+        const timeout = parseInt(document.getElementById('cfg-requestTimeout').value);
+        if (!Validator.isIntInRange(timeout, 1, 30)) {
+            App.toast('请求超时必须在 1-30 秒之间', 'warning');
+            return;
+        }
+        const lng = document.getElementById('cfg-location-longitude').value;
+        if (!Validator.isLng(lng)) {
+            App.toast('经度范围无效（-180~180）', 'warning');
+            return;
+        }
+        const lat = document.getElementById('cfg-location-latitude').value;
+        if (!Validator.isLat(lat)) {
+            App.toast('纬度范围无效（-90~90）', 'warning');
+            return;
+        }
+        const jitter = document.getElementById('cfg-locationJitterMeters').value;
+        if (!Validator.isIntInRange(jitter, 0, 500)) {
+            App.toast('抖动半径必须在 0-500 米之间', 'warning');
+            return;
+        }
+
+        // ---------- 新增：每日漂移距离校验 ----------
+        const driftMin = document.getElementById('cfg-dailyDriftMinMeters').value;
+        const driftMax = document.getElementById('cfg-dailyDriftMaxMeters').value;
+        if (!Validator.isIntInRange(driftMin, 1, 400)) {
+            App.toast('每日漂移最小距离必须在 1-200 米之间', 'warning');
+            return;
+        }
+        if (!Validator.isIntInRange(driftMax, 1, 400)) {
+            App.toast('每日漂移最大距离必须在 1-200 米之间', 'warning');
+            return;
+        }
+        if (parseInt(driftMin) > parseInt(driftMax)) {
+            App.toast('每日漂移最小距离不能大于最大距离', 'warning');
+            return;
+        }
+        const brand = document.getElementById('cfg-device-brand').value;
+        const model = document.getElementById('cfg-device-model').value;
+        const system = document.getElementById('cfg-device-system').value;
+        const platform = document.getElementById('cfg-device-platform').value;
+        const userAgent = document.getElementById('cfg-userAgent').value;
+        if (!brand || !model || !system || !platform || !userAgent) {
+            App.toast('所有设备信息必填', 'warning');
+            return;
+        }
+        document.getElementById('savePassword').value = '';
+        document.getElementById('saveAlert').innerHTML = '';
+        document.getElementById('saveModal').classList.remove('hidden');
+    }
+    async function confirmSave() {
+        var pw = document.getElementById('savePassword').value;
+        if (!pw) { document.getElementById('saveAlert').innerHTML = '<div class="alert alert-warning">请输入密码</div>'; return; }
+        var c = JSON.parse(JSON.stringify(currentConfig));
+        c.auth_mode = document.getElementById('cfg-auth_mode').value;
+        c.code = document.getElementById('cfg-code').value;
+        c.openId = document.getElementById('cfg-openId').value;
+        c.unionId = document.getElementById('cfg-unionId').value;
+        c.encryptValue = document.getElementById('cfg-encryptValue').value;
+        c.sessionId = document.getElementById('cfg-sessionId').value;
+        c.sessionExpireSeconds = parseInt(document.getElementById('cfg-sessionExpireSeconds').value) || 86400;
+        c.cache_ttl_ranking = parseInt(document.getElementById('cfg-cache_ttl_ranking').value) || 3600;
+        c.cache_ttl_clock_detail = parseInt(document.getElementById('cfg-cache_ttl_clock_detail').value) || 7200;
+        c.cache_ttl_journal_list = parseInt(document.getElementById('cfg-cache_ttl_journal_list').value) || 43200;
+        c.requestTimeout = parseInt(document.getElementById('cfg-requestTimeout').value) || 10;
+        c.location = { longitude: document.getElementById('cfg-location-longitude').value, latitude: document.getElementById('cfg-location-latitude').value };
+        c.locationJitterMeters = parseInt(document.getElementById('cfg-locationJitterMeters').value) || 100;
+        c.dailyDriftMinMeters = parseInt(document.getElementById('cfg-dailyDriftMinMeters').value) || 10;
+        c.dailyDriftMaxMeters = parseInt(document.getElementById('cfg-dailyDriftMaxMeters').value) || 100;
+        c.map_radius = parseInt(document.getElementById('cfg-map_radius').value) || 500;
+        c.mapProvider = document.getElementById('cfg-mapProvider').value;
+        c.mapApiKeys = { amap: document.getElementById('cfg-mapApiKeys-amap').value, tencent: document.getElementById('cfg-mapApiKeys-tencent').value };
+        c.device = { brand: document.getElementById('cfg-device-brand').value, model: document.getElementById('cfg-device-model').value, system: document.getElementById('cfg-device-system').value, platform: document.getElementById('cfg-device-platform').value };
+        c.userAgent = document.getElementById('cfg-userAgent').value;
+        if (!c.schedule) c.schedule = {};
+        c.schedule.enabled = document.getElementById('cfg-schedule-enabled').checked;
+        c.schedule.retryIntervalSeconds = parseInt(document.getElementById('cfg-retryIntervalSeconds').value) || 300;
+        c.schedule.maxRetries = parseInt(document.getElementById('cfg-maxRetries').value) || 3;
+        c.schedule.workdays = []; document.querySelectorAll('#cfg-workdays input[type="checkbox"]:checked').forEach(function (cb) { c.schedule.workdays.push(parseInt(cb.value)); });
+        if (currentConfig.web_admin_password_hash) c.web_admin_password_hash = currentConfig.web_admin_password_hash;
+        var data = await App.api('/api/config', { method: 'PUT', body: JSON.stringify({ password: pw, config: c }) });
+        if (data.success) { document.getElementById('saveModal').classList.add('hidden'); toast('<i class="fa-solid fa-circle-check"></i> 配置已保存'); currentConfig = c; }
+        else document.getElementById('saveAlert').innerHTML = '<div class="alert alert-danger">' + data.message + '</div>';
+    }
+    function backupNow() {
+        document.getElementById('backupRemark').value = '';
+        document.getElementById('backupModal').classList.remove('hidden');
+    }
+    async function confirmBackup() {
+        var remark = document.getElementById('backupRemark').value.trim();
+        var body = remark ? JSON.stringify({ remark: remark }) : '{}';
+        var d = await App.api('/api/config/backup', { method: 'POST', body: body });
+        document.getElementById('backupModal').classList.add('hidden');
+        toast(d.success ? '<i class="fa-solid fa-circle-check"></i> ' + d.message : d.message, d.success ? 'success' : 'danger');
+    }
+    function resetDefaultConfirm() {
+        document.getElementById('resetDefaultPwd').value = '';
+        document.getElementById('resetDefaultAlert').innerHTML = '';
+        document.getElementById('resetDefaultModal').classList.remove('hidden');
+    }
+    async function confirmResetDefault() {
+        var alertEl = document.getElementById('resetDefaultAlert');
+        var pw = document.getElementById('resetDefaultPwd').value;
+        if (!pw) { alertEl.innerHTML = '<div class="alert alert-warning">请输入密码</div>'; return; }
+        try {
+            var d = await App.api('/api/config/reset_default', { method: 'POST', body: JSON.stringify({ password: pw }) });
+            if (d.success) {
+                document.getElementById('resetDefaultModal').classList.add('hidden');
+                toast('<i class="fa-solid fa-circle-check"></i> ' + d.message, 'success');
+                setTimeout(function () { loadConfig(); }, 500);
+            } else {
+                alertEl.innerHTML = '<div class="alert alert-danger">' + App.escapeHtml(d.message) + '</div>';
+            }
+        } catch (e) {
+            alertEl.innerHTML = '<div class="alert alert-danger">请求失败: ' + App.escapeHtml(e.message) + '</div>';
+        }
+    }
+
+    async function testSign(action) {
+        var label = action === 'sign_in' ? '签到' : '签退';
+        var btnIn = document.getElementById('btnTestSignIn');
+        var btnOut = document.getElementById('btnTestSignOut');
+        var area = document.getElementById('testResultArea');
+        var body = document.getElementById('testResultBody');
+        var card = document.getElementById('testResultCard');
+        var activeBtn = action === 'sign_in' ? btnIn : btnOut;
+        btnIn.disabled = true; btnOut.disabled = true;
+        activeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 测试中...';
+        area.classList.remove('hidden');
+        card.style.borderColor = 'var(--rose)';
+        body.innerHTML = '<p class="text-muted"><i class="fa-solid fa-spinner fa-spin"></i> 正在测试' + label + '，请稍候...</p>';
+        try {
+            var resp = await fetch('/api/test_sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }), credentials: 'same-origin' });
+            if (resp.status === 401) { window.location.href = '/login'; return; }
+            var data = await resp.json();
+            var elapsed = data.elapsed_ms ? (data.elapsed_ms / 1000).toFixed(2) : '?';
+            if (data.success) {
+                card.style.borderColor = 'var(--green)';
+                body.innerHTML = '<p><i class="fa-solid fa-circle-check"></i> <strong style="color:var(--green)">测试' + label + '成功</strong> <small class="text-muted">耗时 ' + elapsed + 's</small></p><p class="text-sm text-muted">' + App.escapeHtml(data.message) + '</p>';
+            } else {
+                card.style.borderColor = 'var(--red)';
+                body.innerHTML = '<p><i class="fa-solid fa-xmark"></i> <strong style="color:var(--red)">测试' + label + '失败</strong> <small class="text-muted">耗时 ' + elapsed + 's</small></p><p class="text-sm text-danger">' + App.escapeHtml(data.message) + '</p>';
+            }
+        } catch (e) {
+            card.style.borderColor = 'var(--red)';
+            body.innerHTML = '<p><i class="fa-solid fa-xmark"></i> <strong style="color:var(--red)">请求失败</strong></p><p class="text-sm text-danger">' + App.escapeHtml(e.message) + '</p>';
+        } finally {
+            btnIn.disabled = false; btnOut.disabled = false;
+            btnIn.innerHTML = '<i class="fa-solid fa-flask"></i> 测试签到'; btnOut.innerHTML = '<i class="fa-solid fa-flask"></i> 测试签退';
+        }
+    }
+    loadConfig();
+</script>
+{% endblock %}

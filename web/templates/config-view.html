@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}配置查看{% endblock %}
+{% block page_title %}<i class="fa-solid fa-file-code"></i> 配置文件查看{% endblock %}
+{% block content %}
+<div class="flex justify-between mb-3">
+    <div class="flex gap-1">
+        <a href="/admin/config" class="btn btn-outline btn-sm">← 返回编辑</a>
+        <button class="btn btn-outline btn-sm" onclick="copyConfig()"><i class="fa-solid fa-copy"></i> 复制</button>
+        <button class="btn btn-outline btn-sm" onclick="location.reload()"><i class="fa-solid fa-rotate"></i> 刷新</button>
+    </div>
+    <small class="text-muted" id="configPath"></small>
+</div>
+<div class="card"><div class="card-body p-0">
+    <pre id="configView" style="margin:0;padding:1.5rem;font-family:'SF Mono','Cascadia Code','Consolas',monospace;font-size:0.82rem;line-height:1.5;overflow-x:auto;max-height:75vh;white-space:pre-wrap;word-break:break-all;color:var(--text);background:var(--bg)"></pre>
+</div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+(async function(){
+    try {
+        var data = await App.api('/api/config');
+        if (data.success) {
+            document.getElementById('configView').textContent = JSON.stringify(data.config, null, 2);
+            document.getElementById('configPath').textContent = 'config.json';
+        } else {
+            document.getElementById('configView').textContent = '加载失败: ' + data.message;
+        }
+    } catch(e) {
+        document.getElementById('configView').textContent = '请求失败: ' + e.message;
+    }
+})();
+
+function copyConfig() {
+    var text = document.getElementById('configView').textContent;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function(){ toast('<i class="fa-solid fa-circle-check"></i> 已复制到剪贴板'); });
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        toast('<i class="fa-solid fa-circle-check"></i> 已复制到剪贴板');
+    }
+}
+</script>
+{% endblock %}

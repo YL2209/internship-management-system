@@ -1,0 +1,948 @@
+{% extends "base.html" %}
+{% block title %}仪表板{% endblock %}
+{% block page_title %}<i class="fa-solid fa-chart-pie"></i> 仪表板{% endblock %}
+{% block head %}
+<style>
+    .tab-btn {
+        padding: 6px 14px;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 500;
+        background: rgba(255, 255, 255, 0.5);
+        color: var(--slate);
+        transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+        background: var(--rose);
+        color: #fff;
+    }
+</style>
+<script src="/static/js/echarts.min.js"></script>
+<script src="/static/js/anime.min.js"></script>
+{% endblock %}
+{% block content %}
+
+<div class="grid-4 mb-3">
+    <div class="card-stat"><small><i class="fa-solid fa-database"></i> 总签到记录</small>
+        <h2 id="statRecords">-</h2>
+    </div>
+    <div class="card-stat"><small><i class="fa-solid fa-calendar-day"></i> 今日签到</small>
+        <h2 id="statToday">-</h2>
+    </div>
+    <div class="card-stat"><small><i class="fa-solid fa-check-circle"></i> 成功率</small>
+        <h2 id="statSuccess">-</h2>
+    </div>
+    <div class="card-stat"><small><i class="fa-solid fa-clock"></i> 定时任务</small>
+        <h2 id="statSchedule">-</h2>
+    </div>
+</div>
+
+<div class="grid-3 mb-3">
+    <div class="card-stat"><small><i class="fa-solid fa-book-open"></i> 周记素材</small>
+        <h2 id="statWeekly">-</h2>
+    </div>
+    <div class="card-stat"><small><i class="fa-solid fa-chart-bar"></i> 月记素材</small>
+        <h2 id="statMonthly">-</h2>
+    </div>
+    <div class="card-stat"><small><i class="fa-solid fa-paper-plane"></i> 已提交周月记</small>
+        <h2 id="statSubmitted">-</h2>
+    </div>
+</div>
+
+<div class="grid-2 mb-3">
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-list"></i> 最近签到记录</div>
+        <div class="card-body" id="recentRecords" style="max-height:230px;overflow-y:auto">
+            <p class="text-muted">加载中...</p>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-display"></i> 系统状态</div>
+        <div class="card-body">
+            <table style="width:100%">
+                <tr>
+                    <td class="text-muted" style="width:80px">认证模式</td>
+                    <td><span id="sysAuthMode">-</span></td>
+                </tr>
+                <tr>
+                    <td class="text-muted">定时任务</td>
+                    <td><span id="sysSchedule">-</span></td>
+                </tr>
+                <tr>
+                    <td class="text-muted">备份数量</td>
+                    <td><span id="sysBackups">-</span></td>
+                </tr>
+                <tr>
+                    <td class="text-muted">服务器</td>
+                    <td class="text-sm"><span id="sysIp">-</span></td>
+                </tr>
+                <tr>
+                    <td class="text-muted">最后签到</td>
+                    <td class="text-sm"><span id="sysLastSign">-</span></td>
+                </tr>
+                <tr>
+                    <td class="text-muted">最后周记</td>
+                    <td class="text-sm"><span id="sysLastWeekly">-</span></td>
+                </tr>
+                <tr>
+                    <td class="text-muted">最后月记</td>
+                    <td class="text-sm"><span id="sysLastMonthly">-</span></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2 mb-3">
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-lock"></i> 登录频率 — 近30天</div>
+        <div class="card-body">
+            <div id="chartLoginTrend" style="height:220px"></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-earth-asia"></i> 登录来源城市</div>
+        <div class="card-body">
+            <div id="chartLoginCity" style="height:220px"></div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><i class="fa-solid fa-chart-line"></i> 签到趋势 — 近30天</div>
+    <div class="card-body">
+        <div id="chartTrend" style="height:310px"></div>
+    </div>
+</div>
+
+<div class="grid-2 mb-3">
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-calendar"></i> 签到热力日历</div>
+        <div class="card-body">
+            <div id="chartCalendar" style="height:195px"></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-hourglass-half"></i> 签到时段分布</div>
+        <div class="card-body">
+            <div id="chartHour" style="height:195px"></div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2 mb-3">
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-bullseye"></i> 成功率仪表盘</div>
+        <div class="card-body" style="display:flex;align-items:center;justify-content:center;min-height:250px">
+            <div id="gaugeWrap" style="position:relative;width:200px;height:200px">
+                <svg id="gaugeSvg" viewBox="0 0 200 200" style="width:100%;height:100%;transform:rotate(-90deg)">
+                    <circle cx="100" cy="100" r="82" fill="none" stroke="#FFF0F5" stroke-width="14" />
+                    <circle id="gaugeArc" cx="100" cy="100" r="82" fill="none" stroke="url(#gaugeGradient)"
+                        stroke-width="14" stroke-linecap="round" stroke-dasharray="515.2" stroke-dashoffset="515.2" />
+                    <defs>
+                        <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#E88787" />
+                            <stop offset="50%" stop-color="#D4A070" />
+                            <stop offset="100%" stop-color="#7ED687" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div
+                    style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+                    <span id="gaugePercent"
+                        style="font-size:2.4rem;font-weight:600;color:var(--ink);line-height:1;transition:color 0.5s">--</span>
+                    <span style="font-size:0.75rem;color:var(--slate);margin-top:4px;letter-spacing:1px">成功率</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-chart-pie"></i> 成功 / 失败分布</div>
+        <div class="card-body">
+            <div id="chartPie" style="height:250px"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 周记/月记提交日历 + 缓存旭日图（并排） -->
+<div class="grid-2 mb-3">
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-clock-rotate-left"></i> 缓存详情</div>
+        <div class="card-body">
+            <div id="chartCacheSunburst" style="height:280px"></div>
+            <div
+                style="display:flex;justify-content:center;gap:20px;margin-top:8px;font-size:0.8rem;color:var(--slate)">
+                <span><span
+                        style="display:inline-block;width:12px;height:12px;background:#D46070;border-radius:50%;margin-right:4px;"></span>周月记</span>
+                <span><span
+                        style="display:inline-block;width:12px;height:12px;background:#16B644;border-radius:50%;margin-right:4px;"></span>签到</span>
+                <span><span
+                        style="display:inline-block;width:12px;height:12px;background:#FDC763;border-radius:50%;margin-right:4px;"></span>排行榜</span>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-chart-pie"></i> 已提交周月记日期占比</div>
+        <div class="card-body">
+            <div id="chartJournalCal" style="height:280px"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 素材库与已提交周月记占比（嵌套饼图） & 数量统计（并排） -->
+<div class="grid-2 mb-3">
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-chart-pie"></i> 素材库与已提交周月记占比</div>
+        <div class="card-body">
+            <div id="chartJournalSunburst" style="height:300px"></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><i class="fa-solid fa-chart-bar"></i> 周记/月记数量统计</div>
+        <div class="card-body">
+            <div id="chartJournalBar" style="height:300px"></div>
+        </div>
+    </div>
+</div>
+
+
+<!-- 签到详情 — 每日打卡状态分布（独占一行） -->
+<div class="card mb-3">
+    <div class="card-header"><i class="fa-solid fa-clock"></i> 签到详情 — 每日打卡状态分布</div>
+    <div class="card-body">
+        <div id="chartSignStatus" style="height:420px"></div>
+        <div style="display:flex;justify-content:center;gap:20px;margin-top:8px;font-size:0.8rem;color:var(--slate)">
+            <span><span
+                    style="display:inline-block;width:12px;height:12px;background:#16B644;border-radius:50%;margin-right:4px;"></span>正常打卡</span>
+            <span><span
+                    style="display:inline-block;width:12px;height:12px;background:#FDC763;border-radius:50%;margin-right:4px;"></span>补签</span>
+            <span><span
+                    style="display:inline-block;width:12px;height:12px;background:#D46070;border-radius:50%;margin-right:4px;"></span>缺卡</span>
+        </div>
+    </div>
+</div>
+
+
+<!-- 奋斗排行榜（独占一行） -->
+<div class="card mb-3">
+    <div class="card-header"><i class="fa-solid fa-trophy"></i> 奋斗排行榜 <span id="rankingMonthLabel"></span></div>
+    <div class="card-body">
+        <div id="chartRankingBar" style="height:380px"></div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+    var C = { rose: '#D46070', roseL: '#FFB6C1', peach: '#FFE4E1', pink: '#FFC0CB', green: '#7ED687', red: '#E88787', orange: '#D4A070', dark: '#4A4A4A', slate: '#8B8680', bg: '#FFF8F0', white: '#ffffff' };
+    var TT = { backgroundColor: '#fff', borderColor: '#FFE4E1', borderWidth: 1, borderRadius: 8, padding: [8, 12], textStyle: { color: '#4A4A4A', fontSize: 12 }, extraCssText: 'box-shadow:0 4px 16px rgba(212,96,112,0.08)' };
+    function emptyOpt(msg) { return { title: { text: msg || '暂无数据', left: 'center', top: 'center', textStyle: { color: C.slate, fontSize: 13, fontWeight: 'normal' } } }; }
+
+    var charts = {};
+    function initCharts() {
+        ['chartTrend', 'chartCalendar', 'chartHour', 'chartLoginTrend', 'chartLoginCity',
+            'chartPie', 'chartSignStatus', 'chartCacheSunburst',
+            'chartJournalSunburst', 'chartJournalBar', 'chartJournalCal',
+            'chartRankingBar'].forEach(function (id) {
+                var el = document.getElementById(id); if (!el) return; try { charts[id] = echarts.init(el) } catch (e) { }
+            });
+        window.addEventListener('resize', function () { Object.values(charts).forEach(function (c) { try { c.resize() } catch (e) { } }) });
+    }
+
+    // ---------- 原有图表函数 ----------
+    function renderTrend(records) {
+        if (!charts.chartTrend) return;
+        var dateMap = {};
+        records.forEach(function (r) { var d = (r.timestamp || '').slice(0, 10); if (!d) return; if (!dateMap[d]) dateMap[d] = { sin: 0, sout: 0, ok: 0, fail: 0 }; if (r.action === 'sign_in') dateMap[d].sin++; if (r.action === 'sign_out') dateMap[d].sout++; if (r.success) dateMap[d].ok++; else dateMap[d].fail++ });
+        var dates = Object.keys(dateMap).sort().slice(-30);
+        if (!dates.length) { charts.chartTrend.setOption(emptyOpt('暂无签到数据')); return }
+        var sinData = dates.map(function (d) { return dateMap[d].sin }), soutData = dates.map(function (d) { return dateMap[d].sout });
+        var rateData = dates.map(function (d) { var t = dateMap[d].ok + dateMap[d].fail; return t > 0 ? +(dateMap[d].ok / t * 100).toFixed(1) : null });
+        charts.chartTrend.setOption({ animationDuration: 800, color: [C.rose, C.peach, C.green], tooltip: Object.assign({ trigger: 'axis', axisPointer: { type: 'cross' } }, TT), legend: { data: ['签到', '签退', '成功率'], bottom: 0, textStyle: { fontSize: 11, color: C.slate } }, grid: { left: 50, right: 55, top: 18, bottom: 50 }, xAxis: { type: 'category', data: dates, boundaryGap: false, axisLine: { lineStyle: { color: '#FFE4E1' } }, axisTick: { show: false }, axisLabel: { fontSize: 10, color: C.slate, rotate: 30, formatter: function (v) { return v.slice(5) } } }, yAxis: [{ type: 'value', name: '次', minInterval: 1, splitLine: { lineStyle: { color: '#FFF0F5', type: 'dashed' } }, axisLabel: { fontSize: 10, color: C.slate }, axisLine: { show: false }, axisTick: { show: false } }, { type: 'value', name: '%', min: 0, max: 100, splitLine: { show: false }, axisLabel: { fontSize: 10, color: C.slate, formatter: '{value}%' }, axisLine: { show: false }, axisTick: { show: false } }], series: [{ name: '签到', type: 'bar', data: sinData, barMaxWidth: 16, itemStyle: { borderRadius: [4, 4, 0, 0], color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: C.rose }, { offset: 1, color: C.roseL }]) } }, { name: '签退', type: 'bar', data: soutData, barMaxWidth: 16, itemStyle: { borderRadius: [4, 4, 0, 0], color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: C.peach }, { offset: 1, color: '#FFF0F5' }]) } }, { name: '成功率', type: 'line', yAxisIndex: 1, data: rateData, smooth: true, symbol: 'circle', symbolSize: 6, lineStyle: { width: 2.5, color: C.green }, itemStyle: { color: C.green, borderColor: '#fff', borderWidth: 2 }, areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(126,214,135,0.25)' }, { offset: 1, color: 'rgba(126,214,135,0.02)' }]) } }] });
+    }
+
+    function renderCalendar(records) { if (!charts.chartCalendar) return; var dateMap = {}; records.forEach(function (r) { var d = (r.timestamp || '').slice(0, 10); if (d) dateMap[d] = (dateMap[d] || 0) + 1 }); var data = Object.keys(dateMap).map(function (d) { return [d, dateMap[d]] }); if (!data.length) { charts.chartCalendar.setOption(emptyOpt('暂无签到数据')); return } charts.chartCalendar.setOption({ color: [C.rose, C.roseL, C.peach], tooltip: Object.assign({ formatter: function (p) { return p.data[0] + ': ' + p.data[1] + '次' } }, TT), calendar: { top: 20, left: 30, right: 20, cellSize: ['auto', 14], range: data[0] ? [data[0][0], data[data.length - 1][0]] : undefined, splitLine: { lineStyle: { color: '#FFF0F5' } }, itemStyle: { borderColor: '#fff', borderWidth: 2 }, dayLabel: { fontSize: 9, color: C.slate }, monthLabel: { fontSize: 9, color: C.slate } }, series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: data, label: { show: false }, emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(212,96,112,0.3)' } } }] }); }
+
+    function renderHour(records) {
+        if (!charts.chartHour) return;
+        var hourMap = {};
+        for (var i = 0; i < 24; i++)hourMap[i] = { sin: 0, sout: 0 };
+        records.forEach(function (r) {
+            var ts = r.timestamp || '';
+            var m = ts.match(/ (\d{2}):/);
+            if (!m) return;
+            var h = parseInt(m[1]);
+            if (r.action === 'sign_in') hourMap[h].sin++; else hourMap[h].sout++
+        });
+        var hours = Object.keys(hourMap).map(Number).sort(function (a, b) { return a - b });
+        charts.chartHour.setOption({ color: [C.rose, C.green], tooltip: Object.assign({ trigger: 'axis' }, TT), legend: { data: ['签到', '签退'], bottom: 0, textStyle: { fontSize: 11, color: C.slate } }, grid: { left: 40, right: 20, top: 10, bottom: 45 }, xAxis: { type: 'category', data: hours.map(function (h) { return h + '时' }), axisLabel: { fontSize: 10, color: C.slate }, axisLine: { lineStyle: { color: '#FFE4E1' } }, axisTick: { show: false } }, yAxis: { type: 'value', splitLine: { lineStyle: { color: '#FFF0F5', type: 'dashed' } }, axisLabel: { fontSize: 10, color: C.slate }, axisLine: { show: false }, axisTick: { show: false } }, series: [{ name: '签到', type: 'bar', data: hours.map(function (h) { return hourMap[h].sin }), barMaxWidth: 12, itemStyle: { borderRadius: [3, 3, 0, 0] } }, { name: '签退', type: 'bar', data: hours.map(function (h) { return hourMap[h].sout }), barMaxWidth: 12, itemStyle: { borderRadius: [3, 3, 0, 0] } }] });
+    }
+
+    function renderGauge(records) {
+        var ok = 0, fail = 0;
+        records.forEach(function (r) { if (r.success) ok++; else fail++ });
+        var total = ok + fail;
+        var arc = document.getElementById('gaugeArc');
+        var percentEl = document.getElementById('gaugePercent');
+        var circumference = 2 * Math.PI * 82;
+
+        if (!total) {
+            arc.setAttribute('stroke-dashoffset', circumference);
+            arc.setAttribute('stroke', 'var(--slate)'); // 无数据时灰色
+            percentEl.textContent = '--';
+            percentEl.style.color = 'var(--slate)';
+            return;
+        }
+
+        var rate = +(ok / total * 100).toFixed(1);
+        var offset = circumference * (1 - rate / 100);
+        var color = rate >= 90 ? '#7ED687' : rate >= 50 ? '#D4A070' : '#E88787';
+
+        // 同时更新文字和弧线颜色
+        percentEl.style.color = color;
+        arc.setAttribute('stroke', color);
+
+        var arcVal = { o: circumference };
+        anime({
+            targets: arcVal, o: offset, duration: 1200, easing: 'easeOutExpo',
+            update: function () { arc.setAttribute('stroke-dashoffset', arcVal.o); }
+        });
+
+        var numVal = { v: 0 };
+        anime({
+            targets: numVal, v: rate, duration: 1000, easing: 'easeOutExpo', round: 1,
+            update: function () { percentEl.textContent = numVal.v + '%'; }
+        });
+    }
+
+    function renderPie(records) { if (!charts.chartPie) return; var ok = 0, fail = 0; records.forEach(function (r) { if (r.success) ok++; else fail++ }); if (!ok && !fail) { charts.chartPie.setOption(emptyOpt('暂无数据')); return } charts.chartPie.setOption({ color: [C.green, C.red], tooltip: Object.assign({ formatter: '{b}: {c} ({d}%)' }, TT), series: [{ type: 'pie', radius: ['45%', '72%'], center: ['50%', '50%'], label: { fontSize: 12, color: C.slate }, emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.08)' } }, data: [{ value: ok, name: '成功' }, { value: fail, name: '失败' }] }] }); }
+
+    // 周记/月记提交日历 → 改为环形图（已提交周记 vs 已提交月记）
+    function renderJournalCal(submittedList) {
+        if (!charts.chartJournalCal) return;
+        if (!submittedList || submittedList.length === 0) {
+            charts.chartJournalCal.setOption(emptyOpt('暂无提交记录'));
+            return;
+        }
+
+        // 按 startDate 统计每天提交的篇数（日期格式 yyyy-MM-dd）
+        var dateCountMap = {};
+        submittedList.forEach(function (item) {
+            var d = (item.startDate || '').replace(/\./g, '-');
+            if (!d) return;
+            dateCountMap[d] = (dateCountMap[d] || 0) + 1;
+        });
+
+        // 转换为数组并按日期升序排列
+        var entries = Object.keys(dateCountMap).sort().map(function (d) {
+            return { date: d, count: dateCountMap[d] };
+        });
+
+        if (entries.length === 0) {
+            charts.chartJournalCal.setOption(emptyOpt('暂无提交记录'));
+            return;
+        }
+
+        // 环形图数据
+        var pieData = entries.map(function (e) {
+            return { value: e.count, name: e.date };
+        });
+
+        var total = entries.reduce(function (sum, e) { return sum + e.count; }, 0);
+
+        charts.chartJournalCal.setOption({
+            color: [C.rose, C.roseL, C.orange, C.orange, C.peach, C.green, C.red, C.slate],
+            tooltip: Object.assign({
+                trigger: 'item',
+                formatter: '{b}: {c} 篇 ({d}%)'
+            }, TT),
+            series: [{
+                type: 'pie',
+                radius: ['45%', '72%'],
+                center: ['50%', '50%'],
+                label: {
+                    fontSize: 10,
+                    color: C.slate,
+                    formatter: '{b}\n{d}%'
+                },
+                emphasis: {
+                    itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.08)' }
+                },
+                data: pieData
+            }],
+            graphic: total > 0 ? [{
+                type: 'text',
+                left: 'center',
+                top: 'center',
+                style: {
+                    text: total + '\n篇',
+                    textAlign: 'center',
+                    fill: C.slate,
+                    fontSize: 16,
+                    fontWeight: 'bold'
+                }
+            }] : []
+        });
+    }
+
+    function renderLoginCity(history) {
+        if (!charts.chartLoginCity) return;
+        var cityMap = {};
+        (history || []).forEach(function (r) {
+            var city = (r.ip_location || {}).city || (r.ip_location || {}).province || '未知';
+            if (city) cityMap[city] = (cityMap[city] || 0) + 1;
+        });
+        var cities = Object.keys(cityMap).sort(function (a, b) { return cityMap[b] - cityMap[a] }).slice(0, 10);
+        if (!cities.length) { charts.chartLoginCity.setOption(emptyOpt('暂无登录数据')); return }
+        var data = cities.map(function (c) { return { name: c, value: cityMap[c] } });
+        charts.chartLoginCity.setOption({
+            color: [C.rose, C.roseL, C.peach, C.orange, C.pink, C.green, C.red, C.slate, C.dark, C.bg],
+            tooltip: Object.assign({ trigger: 'item', formatter: '{b}: {c}次' }, TT),
+            series: [{
+                type: 'pie', radius: ['35%', '70%'], center: ['50%', '55%'],
+                label: { fontSize: 10, color: C.slate, formatter: '{b}\n{d}%' },
+                emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.08)' } },
+                data: data
+            }]
+        });
+    }
+
+    function renderLoginTrend(history) { if (!charts.chartLoginTrend) return; var dateMap = {}; history.forEach(function (r) { var d = (r.time || '').slice(0, 10); if (d) dateMap[d] = (dateMap[d] || 0) + 1 }); var dates = Object.keys(dateMap).sort().slice(-30); if (!dates.length) { charts.chartLoginTrend.setOption(emptyOpt('暂无数据')); return } var data = dates.map(function (d) { return dateMap[d] }); charts.chartLoginTrend.setOption({ color: [C.rose], tooltip: Object.assign({ trigger: 'axis' }, TT), grid: { left: 40, right: 20, top: 10, bottom: 25 }, xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 9, color: C.slate, rotate: 30, formatter: function (v) { return v.slice(5) } }, axisLine: { lineStyle: { color: '#FFE4E1' } }, axisTick: { show: false } }, yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#FFF0F5', type: 'dashed' } }, axisLabel: { fontSize: 10, color: C.slate }, axisLine: { show: false }, axisTick: { show: false } }, series: [{ type: 'bar', data: data, barMaxWidth: 14, itemStyle: { borderRadius: [3, 3, 0, 0], color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: C.rose }, { offset: 1, color: C.peach }]) } }] }); }
+
+    // 周记/月记数量统计（素材库）
+    // 周记/月记数量统计（环形饼图，类似登录来源城市样式）
+    function renderJournalBar(weekly, monthly) {
+        if (!charts.chartJournalBar) return;
+        var wCount = (weekly || []).length;
+        var mCount = (monthly || []).length;
+        if (!wCount && !mCount) {
+            charts.chartJournalBar.setOption(emptyOpt('暂无周记数据'));
+            return;
+        }
+
+        var total = wCount + mCount;
+
+        charts.chartJournalBar.setOption({
+            color: [C.rose, C.orange],   // 周记-玫瑰色，月记-橙色，与登录城市图配色统一
+            tooltip: Object.assign({
+                trigger: 'item',
+                formatter: '{b}: {c} 篇 ({d}%)'
+            }, TT),
+            series: [{
+                type: 'pie',
+                radius: ['45%', '72%'],          // 环形，与登录来源城市一致
+                center: ['50%', '50%'],
+                label: {
+                    fontSize: 12,
+                    color: C.slate,
+                    formatter: '{b}\n{d}%'
+                },
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 8,
+                        shadowColor: 'rgba(0,0,0,0.08)'
+                    }
+                },
+                data: [
+                    { value: wCount, name: '周记' },
+                    { value: mCount, name: '月记' }
+                ]
+            }],
+            graphic: total > 0 ? [{   // 中间显示总数（可选，如需保留可启用）
+                type: 'text',
+                left: 'center',
+                top: 'center',
+                style: {
+                    text: total + '\n篇',
+                    textAlign: 'center',
+                    fill: C.slate,
+                    fontSize: 16,
+                    fontWeight: 'bold'
+                }
+            }] : []
+        });
+    }
+    // ---------- 签到日历图 ----------
+    const layouts = [
+        [[0, 0]],
+        [[-0.25, 0], [0.25, 0]],
+        [[0, -0.2], [-0.2, 0.2], [0.2, 0.2]],
+        [[-0.25, -0.25], [-0.25, 0.25], [0.25, -0.25], [0.25, 0.25]]
+    ];
+    const pathes = [
+        'M936.857805 523.431322c0 0-42.065715-68.89513-88.786739-68.89513-46.68416 0-95.732122 71.223091-95.732122 71.223091s-44.28544-72.503296-93.440922-71.152538c-35.565466 0.977306-62.89705 30.882406-79.124275 64.06615L579.773747 790.800797c-3.253248 37.391565-5.677568 50.904371-12.002816 69.63497-6.651802 19.698688-19.544883 35.227341-31.650099 45.909606-14.30231 12.621414-29.59831 22.066586-45.854208 27.424563-16.28969 5.362074-30.098739 6.496973-51.536794 6.496973-19.498906 0-36.95104-2.963456-52.395418-8.850534-15.410586-5.887078-28.420403-14.313984-39.034573-25.246003-10.613146-10.930995-18.757939-24.08151-24.435507-39.525171-5.676544-15.443763-8.532685-40.195482-8.532685-59.270963l0-26.232454 74.435273 0c0 24.644301-0.17705 64.452915 8.81408 77.006848 9.02697 12.515021 22.756147 18.092032 41.148826 18.791014 16.728678 0.636518 30.032179-8.061645 30.032179-8.061645s11.922022-10.5472 14.992077-19.756954c2.674995-8.025805 3.565363-22.180147 3.565363-22.180147s2.080461-21.789286 2.080461-34.234675L489.399906 514.299369c-16.678502-18.827776-43.801395-61.938688-82.756096-60.927693-54.699008 1.419366-100.422144 70.059622-100.422144 70.059622s-56.065126-70.059622-93.440922-70.059622c-37.376717 0-91.077939 70.059622-91.077939 70.059622S105.343488 156.737741 476.742042 119.363584l53.70327-74.714624 51.373056 74.714624C964.889395 142.740992 936.857805 523.431322 936.857805 523.431322z',
+        'M533.504 268.288q33.792-41.984 71.68-75.776 32.768-27.648 74.24-50.176t86.528-19.456q63.488 5.12 105.984 30.208t67.584 63.488 34.304 87.04 6.144 99.84-17.92 97.792-36.864 87.04-48.64 74.752-53.248 61.952q-40.96 41.984-85.504 78.336t-84.992 62.464-73.728 41.472-51.712 15.36q-20.48 1.024-52.224-14.336t-69.632-41.472-79.872-61.952-82.944-75.776q-26.624-25.6-57.344-59.392t-57.856-74.24-46.592-87.552-21.504-100.352 11.264-99.84 39.936-83.456 65.536-61.952 88.064-35.328q24.576-5.12 49.152-1.536t48.128 12.288 45.056 22.016 40.96 27.648q45.056 33.792 86.016 80.896z',
+        'M741.06368 733.310464c8.075264-29.262438 20.615373-40.632422 14.64105-162.810061C966.089728 361.789952 967.93897 72.37847 967.855002 54.693683c0.279347-0.279347 0.418509-0.419533 0.418509-0.419533s-0.17705-0.00512-0.428749-0.00512c0-0.251699 0-0.428749 0-0.428749s-0.139162 0.14633-0.418509 0.425677c-17.695744-0.083866-307.10784 1.760051-515.833958 212.142592-122.181632-5.984256-133.55305 6.563533-162.815693 14.644531C235.35063 295.798886 103.552614 436.975309 90.630758 486.076621c-12.921856 49.105408 39.634227 56.859034 58.579558 58.581197 18.953421 1.724314 121.471386-9.475789 130.09111 4.309094 0 0 16.367411 11.200102 17.226035 41.346662 0.850432 29.796659 15.173222 71.354163 37.123994 97.267302-0.028672 0.027648-0.05632 0.054272-0.083866 0.074752 0.158618 0.13097 0.316211 0.261939 0.474829 0.390861 0.129946 0.149402 0.261939 0.319283 0.393011 0.468685 0.019456-0.019456 0.04608-0.049152 0.075776-0.075674 25.918362 21.961216 67.477504 36.272128 97.269248 37.122458 30.149837 0.859546 41.354547 17.234534 41.354547 17.234534 13.779354 8.608051 2.583962 111.122842 4.302131 130.075546 1.727386 18.95168 9.477222 71.498445 58.579558 58.576077C585.12896 918.526771 726.311117 786.734182 741.06368 733.310464zM595.893555 426.206003c-39.961702-39.965184-39.961702-104.75991 0-144.720077 39.970918-39.96928 104.768307-39.96928 144.730112 0 39.970918 39.960064 39.970918 104.75479 0 144.720077C700.661862 466.171187 635.864474 466.171187 595.893555 426.206003zM358.53312 769.516032c-31.923302-4.573184-54.890394-18.410291-71.41847-35.402342-16.984474-16.526438-30.830387-39.495475-35.405824-71.420621-4.649062-28.082586-20.856832-41.167565-38.76649-38.763827-17.906586 2.40681-77.046886 66.714419-80.857805 89.475891-3.80887 22.752154 29.271859 12.081152 46.424166 27.654861 17.151283 15.590093-2.139853 61.93664-14.733107 86.845952-6.441984 12.735078-10.289766 26.42176-4.22953 33.76087 7.346586 6.070272 21.03593 2.222592 33.769472-4.220109 24.912384-12.585677 71.258829-31.872922 86.842368-14.731469 15.583539 17.160806 4.911002 50.229965 27.674419 46.419251 22.754099-3.807744 87.065395-62.946611 89.466163-80.85248C399.70857 790.374093 386.627072 774.166938 358.53312 769.516032z',
+        'M848.794624 939.156685 571.780416 939.156685 571.780416 653.17123l341.897539 0 0 221.100654C913.677926 909.960704 884.482867 939.156685 848.794624 939.156685zM571.780403 318.743552c-11.861606-3.210138-31.443354-8.36864-39.829709-16.176435-0.596582-0.561766-1.016218-1.246413-1.613824-1.841971-0.560845 0.596582-1.016218 1.280205-1.613824 1.841971-8.386355 7.807795-15.96631 12.965274-27.827917 16.176435l0 263.544325L141.030675 582.287877 141.030675 355.202884c0-35.687834 29.195059-64.882688 64.883302-64.882688l150.649125 0c-16.984474-9.525965-32.846438-20.56233-46.111027-32.932045-60.250624-56.144691-71.129907-137.062605-24.283034-180.767027 19.615539-18.264986 46.252237-27.124736 75.026739-27.124736 39.933133 0 83.972915 17.070797 118.995968 49.706086 20.353331 18.983322 37.722624 43.405619 50.145075 69.056819 12.457267-25.6512 29.791744-50.074419 50.180915-69.056819 35.022029-32.63529 79.062835-49.706086 118.994944-49.706086 28.74071 0 55.410176 8.860774 75.025715 27.124736 46.882611 43.704422 35.96759 124.622336-24.283034 180.767027-13.264589 12.368691-29.127578 23.40608-46.111027 32.932045l144.649234 0c35.688243 0 64.882278 29.195981 64.882278 64.882688l0 227.084948L571.780416 582.287833 571.780416 318.743508zM435.064218 147.625267c-21.476966-19.965747-49.094144-31.913882-73.868288-31.913882-7.404954 0-21.125018 1.211597-29.863322 9.386803-2.000691 1.824563-8.070144 7.439462-8.070144 21.369754 0 15.650406 8.492749 40.24873 32.319386 62.477926 29.124506 27.12576 77.202432 47.601152 111.76704 47.601152 12.176794 0 16.492237-2.666701 16.527053-2.702541C489.524736 242.54505 475.664486 185.453773 435.064218 147.625267zM577.78135 254.790963c0 0 0.034816-0.034816 0.069632-0.034816 0.807424 0 5.50871 1.790771 15.509914 1.790771 34.564608 0 82.64151-20.47529 111.76704-47.601152 23.826637-22.229299 32.283546-46.810112 32.283546-62.442189 0-13.930291-6.033613-19.562496-8.035328-21.404467-8.77312-8.17623-22.457344-9.386803-29.864346-9.386803-24.808038 0-52.390298 11.948134-73.867264 31.913882C585.325466 185.208218 571.358822 241.73865 577.78135 254.790963zM500.89513 939.156685 205.914017 939.156685c-35.688243 0-64.883302-29.195981-64.883302-64.883712L141.030714 653.17123l359.864462 0L500.895177 939.15666z'
+    ];
+    // 颜色映射：0-正常(绿), 1-补签(橙), 2-缺卡(红)
+    const colors = ['#16B644', '#FDC763', '#D46070'];
+
+    function renderSignStatus(records) {
+        if (!charts.chartSignStatus) return;
+        if (!records || records.length === 0) {
+            charts.chartSignStatus.setOption(emptyOpt('暂无签到详情缓存数据'));
+            return;
+        }
+
+        var dateMap = {};
+        var seen = new Set();
+
+        records.forEach(function (r) {
+            var d = (r.clockDate || '').replace(/\./g, '-');
+            if (!d) return;
+            var sid = r.studentId;
+            var key = d + '_' + sid;
+            if (seen.has(key)) return;
+            seen.add(key);
+
+            if (!dateMap[d]) dateMap[d] = { events: [], outTime: '', inTime: '' };
+
+            // 事件类型
+            if (r.clockStatus === 0) {
+                dateMap[d].events.push(2);
+            } else if (r.supplementaryNum > 0) {
+                dateMap[d].events.push(1);
+            } else {
+                dateMap[d].events.push(0);
+            }
+
+            // 签退时间
+            if (!dateMap[d].outTime) {
+                var outTime = r.clockOutTime;
+                if (outTime && outTime.indexOf(':') !== -1) {
+                    dateMap[d].outTime = outTime.substring(0, 5);
+                }
+            }
+
+            // 签到时间（毫秒时间戳）
+            if (!dateMap[d].inTime && r.clockDInTime) {
+                var dt = new Date(r.clockDInTime);
+                if (!isNaN(dt.getTime())) {
+                    dateMap[d].inTime = String(dt.getHours()).padStart(2, '0') + ':' +
+                                        String(dt.getMinutes()).padStart(2, '0');
+                }
+            }
+        });
+
+        var allDates = Object.keys(dateMap).sort();
+        // 超过35天时，每次去除最早一周（7天），确保日历周完整
+        var dates = allDates;
+        while (dates.length > 35) {
+            dates = dates.slice(7);
+        }
+        // 对齐到周一：如果第一条不是周一，前移 startDate 到周一
+        var startDate = dates[0];
+        var endDate = dates[dates.length - 1];
+        var startDay = new Date(startDate).getDay() || 7;
+        if (startDay > 1) {
+            // 前移 startDate 到本周一，让日历从完整周开始
+            var d = new Date(startDate);
+            d.setDate(d.getDate() - (startDay - 1));
+            startDate = d.toISOString().slice(0, 10);
+        }
+        if (dates.length === 0) return;
+
+        var data = dates.map(function (d) {
+            var rec = dateMap[d];
+            var events = rec.events.slice(0, 4);
+            return [d, events.join('|'), rec.outTime, rec.inTime];  // 新增 inTime
+        });
+
+        charts.chartSignStatus.setOption({
+            tooltip: {
+                formatter: function (params) {
+                    var d = params.data[0];
+                    var out = params.data[2];
+                    var inT = params.data[3];
+                    var html = d;
+                    if (inT) html += '<br/>签到: ' + inT;
+                    if (out) html += '<br/>签退: ' + out;
+                    return html;
+                }
+            },
+            calendar: {
+                left: 60,
+                top: 60,
+                right: 20,
+                cellSize: ['auto', 70],
+                yearLabel: { show: false },
+                orient: 'vertical',
+                splitLine: { lineStyle: { color: '#FFF0F5' } },
+                itemStyle: { borderColor: '#fff', borderWidth: 2 },
+                dayLabel: { show: true, firstDay: 1, nameMap: 'cn' },
+                monthLabel: { show: true },
+                range: [startDate, endDate]
+            },
+            series: [{
+                type: 'custom',
+                coordinateSystem: 'calendar',
+                renderItem: function (params, api) {
+                    var cellPoint = api.coord(api.value(0));
+                    var cellWidth = params.coordSys.cellWidth;
+                    var cellHeight = params.coordSys.cellHeight;
+                    if (isNaN(cellPoint[0]) || isNaN(cellPoint[1])) return;
+
+                    var value = api.value(1) || '';
+                    var events = value.split('|');
+                    var outTime = api.value(2) || '';
+                    var inTime = api.value(3) || '';   // 新增
+
+                    var group = { type: 'group', children: [] };
+                    var layout = (layouts[events.length - 1] || []);
+                    events.forEach(function (evtStr, idx) {
+                        var evt = +evtStr;
+                        if (isNaN(evt) || evt >= pathes.length) return;
+                        group.children.push({
+                            type: 'path',
+                            shape: { pathData: pathes[evt], x: -8, y: -8, width: 16, height: 16 },
+                            position: [
+                                cellPoint[0] + echarts.number.linearMap(layout[idx] ? layout[idx][0] : 0, [-0.5, 0.5], [-cellWidth / 2, cellWidth / 2]),
+                                cellPoint[1] + echarts.number.linearMap(layout[idx] ? layout[idx][1] : 0, [-0.5, 0.5], [-cellHeight / 2 + 20, cellHeight / 2])
+                            ],
+                            style: api.style({ fill: colors[evt] })
+                        });
+                    });
+
+                    // 日期数字
+                    group.children.push({
+                        type: 'text',
+                        style: { x: cellPoint[0], y: cellPoint[1] - cellHeight / 2 + 15, text: echarts.format.formatTime('dd', api.value(0)), fill: '#777', textFont: api.font({ fontSize: 14 }) }
+                    });
+
+                    // 签到时间（在签退时间上方）
+                    if (inTime) {
+                        group.children.push({
+                            type: 'text',
+                            style: { x: cellPoint[0], y: cellPoint[1] - cellHeight / 2 + 30, text: inTime, fill: C.slate, textFont: api.font({ fontSize: 10 }) }
+                        });
+                    }
+
+                    // 签退时间（下移避免重叠）
+                    if (outTime) {
+                        group.children.push({
+                            type: 'text',
+                            style: { x: cellPoint[0], y: cellPoint[1] - cellHeight / 2 + (inTime ? 46 : 32), text: outTime, fill: C.slate, textFont: api.font({ fontSize: 10 }) }
+                        });
+                    }
+
+                    return group;
+                },
+                dimensions: [undefined, { type: 'ordinal' }],
+                data: data
+            }]
+        });
+    }
+
+
+    // ---------- 缓存旭日图 ----------
+    async function renderCacheSunburst() {
+        if (!charts.chartCacheSunburst) return;
+        try {
+            var resp = await App.api('/api/cache/details');
+            if (!resp.success || !resp.details) {
+                charts.chartCacheSunburst.setOption(emptyOpt('暂无缓存数据'));
+                return;
+            }
+
+            var sunData = [];
+            var colorMap = { journal_list: '#D46070', clock_detail: '#16B644', ranking: '#FDC763' };
+            var nameMap = { journal_list: '周月记', clock_detail: '签到', ranking: '排行榜' };
+
+            ['journal_list', 'clock_detail', 'ranking'].forEach(function (type) {
+                var entries = resp.details[type] || [];
+                if (entries.length === 0) return;
+                var children = entries.map(function (e) {
+                    var label = e.key;
+                    if (type === 'journal_list') {
+                        label = label.replace('blog_type_1_', '周记-').replace('blog_type_2_', '月记-').replace('_page_', ' 第') + '页';
+                    } else if (type === 'clock_detail') {
+                        label = e.key;
+                    } else if (type === 'ranking') {
+                        label = e.key + ' 月';
+                    }
+                    return {
+                        name: label,
+                        value: e.data_size,
+                        expired: e.expired,
+                        expire_at: e.expire_at,
+                        cached_at: e.cached_at,
+                        itemStyle: { color: e.expired ? '#ccc' : undefined }
+                    };
+                });
+                sunData.push({ name: nameMap[type], itemStyle: { color: colorMap[type] }, children: children });
+            });
+
+            if (sunData.length === 0) {
+                charts.chartCacheSunburst.setOption(emptyOpt('暂无缓存数据'));
+                return;
+            }
+
+            charts.chartCacheSunburst.setOption({
+                tooltip: {
+                    formatter: function (params) {
+                        if (params.data && params.data.expire_at) {
+                            var expDate = new Date(params.data.expire_at * 1000).toLocaleString();
+                            var cacheDate = params.data.cached_at || '';
+                            return params.name + '<br/>数据量: ' + params.value + '<br/>缓存时间: ' + cacheDate + '<br/>过期时间: ' + expDate + (params.data.expired ? ' (已过期)' : '');
+                        }
+                        return params.name + ': ' + params.value;
+                    }
+                },
+                series: {
+                    type: 'sunburst',
+                    data: sunData,
+                    radius: [0, '90%'],
+                    center: ['50%', '50%'],
+                    itemStyle: { borderRadius: 7, borderWidth: 2 },
+                    label: { rotate: 'radial', color: '#fff', fontSize: 10 },
+                    emphasis: { label: { show: true, fontSize: 12 } },
+                    levels: [
+                        {},
+                        { label: { show: true, fontSize: 12, fontWeight: 'bold' }, itemStyle: { borderWidth: 2 } },
+                        { label: { show: true, fontSize: 9 }, itemStyle: { borderWidth: 1 } }
+                    ]
+                }
+            });
+
+        } catch (e) {
+            console.error('加载缓存详情失败:', e);
+            charts.chartCacheSunburst.setOption(emptyOpt('加载失败'));
+        }
+    }
+
+    // ---------- 素材库与已提交周月记占比（嵌套饼图） ----------
+    async function renderJournalSunburst(weekly, monthly, submittedList) {
+        if (!charts.chartJournalSunburst) return;
+        try {
+            if (!submittedList) {
+                var journalResp = await App.api('/api/cache/data?type=journal_list');
+                submittedList = journalResp.success ? journalResp.data : [];
+            }
+            var submittedWeekly = 0, submittedMonthly = 0;
+            submittedList.forEach(function (item) {
+                if (item.blogType === 'weekly') submittedWeekly++;
+                else if (item.blogType === 'monthly') submittedMonthly++;
+            });
+
+            var weeklyTotal = (weekly || []).length;
+            var monthlyTotal = (monthly || []).length;
+
+            var innerData = [
+                { value: monthlyTotal - submittedMonthly, name: '月记未提交', itemStyle: { color: '#FDC763' } },
+                { value: submittedMonthly, name: '月记已提交', itemStyle: { color: '#16B644' } }
+            ];
+            var outerData = [
+                { value: weeklyTotal - submittedWeekly, name: '周记未提交', itemStyle: { color: '#D46070' } },
+                { value: submittedWeekly, name: '周记已提交', itemStyle: { color: '#3498db' } }
+            ];
+
+            charts.chartJournalSunburst.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c} ({d}%)'
+                },
+                legend: {
+                    orient: 'horizontal',
+                    bottom: 0,
+                    data: ['周记未提交', '周记已提交', '月记未提交', '月记已提交']
+                },
+                series: [
+                    {
+                        name: '月记',
+                        type: 'pie',
+                        selectedMode: 'single',
+                        radius: [0, '30%'],
+                        label: {
+                            position: 'inner',
+                            fontSize: 12
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: innerData
+                    },
+                    {
+                        name: '周记',
+                        type: 'pie',
+                        radius: ['45%', '60%'],
+                        labelLine: {
+                            length: 20
+                        },
+                        label: {
+                            formatter: '{b}: {c} ({d}%)'
+                        },
+                        data: outerData
+                    }
+                ]
+            });
+        } catch (e) {
+            console.error('加载周记占比图失败:', e);
+            charts.chartJournalSunburst.setOption(emptyOpt('加载失败'));
+        }
+    }
+
+
+    // 奋斗排行榜（混合柱折线图，无工具箱，折线为参考工作时间）
+    function renderRankingBar(rankingList) {
+        if (!charts.chartRankingBar) return;
+        if (!rankingList || rankingList.length === 0) { charts.chartRankingBar.setOption(emptyOpt('暂无排行榜数据')); return; }
+        var allZero = rankingList.every(function (r) { return parseFloat(r.avgWorks) === 0; });
+        if (allZero) { charts.chartRankingBar.setOption(emptyOpt('本月平均工时均为 0，暂无数据')); return; }
+        rankingList.sort(function (a, b) { return a.ranking - b.ranking; });
+        var names = rankingList.map(function (r) { return r.userName; });
+        var values = rankingList.map(function (r) { return parseFloat(r.avgWorks); });
+        var workHourRef = 8.0; // 参考工作时间
+        var refLine = names.map(function () { return workHourRef; });
+        charts.chartRankingBar.setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'cross', crossStyle: { color: '#999' } } },
+            legend: { data: ['平均工时', '参考工作时间'], bottom: 0, textStyle: { fontSize: 11, color: C.slate } },
+            grid: { left: 60, right: 60, top: 40, bottom: 50 },
+            xAxis: { type: 'category', data: names, axisPointer: { type: 'shadow' }, axisLabel: { fontSize: 9, color: C.slate, rotate: 30 }, axisLine: { lineStyle: { color: '#FFE4E1' } }, axisTick: { show: false } },
+            yAxis: {
+                type: 'value',
+                name: '工时 (h)',
+                min: 0,
+                axisLabel: { fontSize: 10, color: C.slate, formatter: '{value} h' },
+                splitLine: { lineStyle: { color: '#FFF0F5', type: 'dashed' } },
+                axisLine: { show: false },
+                axisTick: { show: false }
+            },
+            series: [
+                {
+                    name: '平均工时',
+                    type: 'bar',
+                    data: values,
+                    barMaxWidth: 24,
+                    itemStyle: {
+                        borderRadius: [4, 4, 0, 0],
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: C.rose },
+                            { offset: 1, color: C.roseL }
+                        ])
+                    },
+                    tooltip: { valueFormatter: function (value) { return value + ' h'; } }
+                },
+                {
+                    name: '参考工作时间',
+                    type: 'line',
+                    data: refLine,          // 所有值均为 workHourRef
+                    lineStyle: { width: 2, type: 'dashed', color: C.green },
+                    itemStyle: { color: C.green },
+                    symbol: 'none',
+                    tooltip: { valueFormatter: function (value) { return value + ' h'; } }
+                }
+            ]
+        });
+    }
+    // ---------- 主加载函数 ----------
+    async function loadDashboard() {
+        try {
+            // ★ 并行获取基础数据
+            var [recordsResp, statsResp, statusResp, backupsResp] = await Promise.all([
+                App.api('/api/records?per_page=999'),
+                App.api('/api/records/stats'),
+                App.api('/api/status'),
+                App.api('/api/config/backups')
+            ]);
+            var records = recordsResp.records || [];
+            var stats = statsResp;
+
+            // ★ 更新所有统计卡片
+            document.getElementById('statRecords').textContent = (stats.total || 0).toLocaleString();
+            document.getElementById('statToday').textContent = stats.today_count || 0;
+            document.getElementById('statSuccess').textContent = stats.total > 0 ? Math.round((stats.success_count || 0) / stats.total * 100) + '%' : '-';
+            document.getElementById('statSchedule').textContent = statusResp.schedule_config ? (statusResp.schedule_config.enabled ? statusResp.schedule_config.task_count + '个' : '关闭') : '-';
+            document.getElementById('sysAuthMode').textContent = statusResp.auth_mode || '-';
+            document.getElementById('sysSchedule').textContent = statusResp.schedule_config ? (statusResp.schedule_config.enabled ? (statusResp.schedule_config.has_tasks ? statusResp.schedule_config.task_count + '个任务' : '无任务') : '关闭') : '-';
+            document.getElementById('sysBackups').textContent = backupsResp.total || '-';
+            document.getElementById('sysIp').textContent = (statusResp.server || {}).ip || '-';
+            document.getElementById('sysLastSign').textContent = stats.last_sign_in || '-';
+
+            // 最近签到记录
+            var recentHtml = '';
+            records.slice(0, 10).forEach(function (r) {
+                var a = r.action === 'sign_in' ? '签到' : '签退';
+                var c = r.success ? '#7ED687' : '#E88787';
+                recentHtml += '<div style="padding:0.3rem 0;border-bottom:1px solid rgba(255,228,225,0.3);font-size:0.82rem"><span style="color:' + c + ';font-weight:500">' + (r.success ? '✓' : '✗') + '</span> ' + a + ' — ' + (r.timestamp || '') + '</div>';
+            });
+            document.getElementById('recentRecords').innerHTML = recentHtml || '暂无记录';
+
+            initCharts();
+            var historyResp = await App.api('/api/login-history');
+            renderTrend(records); renderCalendar(records); renderHour(records); renderGauge(records); renderPie(records);
+            renderLoginTrend(historyResp.records || []); renderLoginCity(historyResp.records || []);
+
+            // 周记/月记统计
+            try {
+                var libResp = await App.api('/api/journal/library?type=all');
+                var weekly = [], monthly = [];
+                if (libResp.success && libResp.library) {
+                    weekly = libResp.library.weekly || [];
+                    monthly = libResp.library.monthly || [];
+                    document.getElementById('statWeekly').textContent = weekly.length + '篇';
+                    document.getElementById('statMonthly').textContent = monthly.length + '篇';
+                    if (weekly.length) { var w = weekly[weekly.length - 1]; document.getElementById('sysLastWeekly').textContent = (w.start_date || '?') + ' ~ ' + (w.end_date || '?'); }
+                    if (monthly.length) { var m = monthly[monthly.length - 1]; document.getElementById('sysLastMonthly').textContent = (m.start_date || '?') + ' ~ ' + (m.end_date || '?'); }
+                }
+                var recResp = await App.api('/api/journal/records');
+                if (recResp.success && recResp.records) {
+                    document.getElementById('statSubmitted').textContent = recResp.records.filter(function (r) { return r.success; }).length + '次';
+                }
+
+                // 获取已提交列表（供日历和饼图使用）
+                var journalResp = await App.api('/api/cache/data?type=journal_list');
+                var submittedList = journalResp.success ? journalResp.data : [];
+
+                // 提交日历
+                // var calItems = submittedList.map(function (item) {
+                //     return { start_date: (item.startDate || '').replace(/\./g, '-'), blogType: item.blogType };
+                // });
+                // renderJournalCal(calItems);
+                renderJournalCal(submittedList);  // 直接传入原始数组
+
+                // 嵌套饼图
+                await renderJournalSunburst(weekly, monthly, submittedList);
+
+                // 数量统计
+                renderJournalBar(weekly, monthly);
+            } catch (e) { console.error(e); }
+
+            // 签到日历 & 奋斗榜
+            try {
+                var [clockResp, rankResp] = await Promise.all([
+                    App.api('/api/cache/data?type=clock_detail&limit=2000'),
+                    App.api('/api/cache/data?type=ranking')
+                ]);
+                if (clockResp.success) renderSignStatus(clockResp.data);
+                if (rankResp.success && rankResp.data && rankResp.data.length > 0) {
+                    var rankData = rankResp.data;
+                    var months = {};
+                    rankData.forEach(function (r) { months[r.month] = true; });
+                    var monthKeys = Object.keys(months).sort();
+                    var targetMonth = null;
+                    for (var i = monthKeys.length - 1; i >= 0; i--) {
+                        var month = monthKeys[i];
+                        var monthItems = rankData.filter(function (r) { return r.month === month; });
+                        if (monthItems.some(function (r) { return parseFloat(r.avgWorks) > 0; })) {
+                            targetMonth = month; break;
+                        }
+                    }
+                    if (!targetMonth) targetMonth = monthKeys[monthKeys.length - 1];
+                    var monthData = rankData.filter(function (r) { return r.month === targetMonth; });
+                    document.getElementById('rankingMonthLabel').textContent = ' (' + targetMonth + ')';
+                    renderRankingBar(monthData);
+                }
+            } catch (e) { console.error(e); }
+
+            // 缓存旭日图
+            await renderCacheSunburst();
+
+        } catch (e) { console.error(e); }
+    }
+    loadDashboard();
+</script>
+{% endblock %}

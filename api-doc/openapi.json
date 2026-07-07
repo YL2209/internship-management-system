@@ -1,0 +1,1150 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "sign-in-docker API",
+    "version": "2.1.0",
+    "description": "实习数据管理系统 API 文档 — Web 管理后台 + 定时签到守护\n\n所有 API（除登录/登出/健康检查外）需在请求头携带 JWT Token：\n`Authorization: Bearer <token>`\n\nToken 通过 POST /api/auth/login 获取，有效期默认 8 小时。"
+  },
+  "servers": [
+    { "url": "http://127.0.0.1:5000", "description": "本地开发" },
+    { "url": "https://your-server.com", "description": "生产环境" }
+  ],
+  "security": [{ "BearerAuth": [] }],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "认证", "description": "登录、登出、Token 验证、密码修改" },
+    { "name": "配置", "description": "config.json 读写、备份恢复" },
+    { "name": "签到", "description": "普通签到/签退、拍照签到、微信登录" },
+    { "name": "补签", "description": "异常日期查询、补签提交、排行榜" },
+    { "name": "周记/月记", "description": "周记提交、列表、素材库管理" },
+    { "name": "记录查询", "description": "签到记录、请求日志、系统日志、登录历史" },
+    { "name": "缓存", "description": "缓存状态、详情、数据查看" },
+    { "name": "学生数据", "description": "签到详情、当天状态" }
+  ],
+  "paths": {
+    "------------------------------------ 认证 ------------------------------------": {},
+    "/api/auth/login": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "管理员登录",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": {
+                  "password": { "type": "string", "description": "管理员密码", "example": "admin123" },
+                  "public_ip": { "type": "string", "description": "前端检测的公网 IP（可选）" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "token": { "type": "string", "description": "JWT Token" },
+                    "message": { "type": "string", "example": "登录成功" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "密码错误" },
+          "429": { "description": "速率限制（10次/分钟，超出锁定5分钟）" }
+        }
+      }
+    },
+    "/api/auth/verify": {
+      "get": {
+        "tags": ["认证"],
+        "summary": "验证 Token 有效性",
+        "responses": {
+          "200": {
+            "description": "Token 有效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "username": { "type": "string", "example": "admin" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Token 无效或过期" }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "登出（清除 Cookie）",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "登出成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "已登出" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "修改管理员密码",
+        "description": "修改后持久化到 config.json",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["new_password"],
+                "properties": {
+                  "old_password": { "type": "string", "description": "当前密码" },
+                  "new_password": { "type": "string", "description": "新密码（至少6位）", "minLength": 6, "example": "newpass123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "密码已更新" },
+          "400": { "description": "新密码不足6位" },
+          "401": { "description": "当前密码错误" },
+          "500": { "description": "写入配置文件失败" }
+        }
+      }
+    },
+    "/api/auth/wechat-login": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "微信小程序登录",
+        "description": "用 code 换取 openId/unionId，自动登录并缓存 JSESSIONID。同时将凭证写入 config.json。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": { "type": "string", "description": "微信 OAuth code" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "loginArgs": {
+                      "type": "object",
+                      "properties": {
+                        "openId": { "type": "string" },
+                        "unionId": { "type": "string" },
+                        "encryptValue": { "type": "string" },
+                        "sessionId": { "type": "string" },
+                        "traineeId": { "type": "string" }
+                      }
+                    },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "500": { "description": "登录失败" }
+        }
+      }
+    },
+    "------------------------------------ 配置 ------------------------------------": {},
+    "/api/config": {
+      "get": {
+        "tags": ["配置"],
+        "summary": "获取完整配置",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "config": { "type": "object", "description": "完整配置对象（已过滤 _ 开头的注释字段）" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["配置"],
+        "summary": "更新完整配置",
+        "description": "需要管理员密码二次确认",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password", "config"],
+                "properties": {
+                  "password": { "type": "string", "description": "管理员密码" },
+                  "config": { "type": "object", "description": "完整配置对象" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "配置已保存" },
+          "400": { "description": "配置校验失败" },
+          "401": { "description": "密码验证失败" }
+        }
+      }
+    },
+    "/api/config/section/{key_path}": {
+      "put": {
+        "tags": ["配置"],
+        "summary": "更新配置某个字段",
+        "parameters": [
+          {
+            "name": "key_path",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "点分隔的路径，如 location.latitude",
+            "example": "location.latitude"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password", "value"],
+                "properties": {
+                  "password": { "type": "string", "description": "管理员密码" },
+                  "value": { "description": "新值" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "配置已更新" },
+          "400": { "description": "参数错误" },
+          "401": { "description": "密码错误" }
+        }
+      }
+    },
+    "/api/config/backup": {
+      "post": {
+        "tags": ["配置"],
+        "summary": "备份当前配置",
+        "description": "生成 config.backup.<timestamp>.json",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "filename": { "type": "string" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/backups": {
+      "get": {
+        "tags": ["配置"],
+        "summary": "获取备份列表",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "backups": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/backups/{filename}": {
+      "get": {
+        "tags": ["配置"],
+        "summary": "查看备份内容",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "config.backup.20260702_174309.json"
+          }
+        ],
+        "responses": {
+          "200": { "description": "备份内容" },
+          "404": { "description": "备份文件不存在" }
+        }
+      },
+      "delete": {
+        "tags": ["配置"],
+        "summary": "删除备份",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "已删除" }
+        }
+      }
+    },
+    "/api/config/restore": {
+      "post": {
+        "tags": ["配置"],
+        "summary": "从备份恢复配置",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password", "filename"],
+                "properties": {
+                  "password": { "type": "string", "description": "管理员密码" },
+                  "filename": { "type": "string", "description": "备份文件名" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "已恢复" },
+          "401": { "description": "密码错误" }
+        }
+      }
+    },
+    "/api/config/reset_default": {
+      "post": {
+        "tags": ["配置"],
+        "summary": "恢复默认配置",
+        "description": "用 config.default.json 覆盖 config.json",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": {
+                  "password": { "type": "string", "description": "管理员密码" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "已恢复默认" },
+          "401": { "description": "密码错误" }
+        }
+      }
+    },
+    "/api/config/backups/compare": {
+      "post": {
+        "tags": ["配置"],
+        "summary": "对比两个备份",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["file1", "file2"],
+                "properties": {
+                  "file1": { "type": "string" },
+                  "file2": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "diff": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "------------------------------------ 签到 ------------------------------------": {},
+    "/api/test_sign": {
+      "post": {
+        "tags": ["签到"],
+        "summary": "测试签到/签退",
+        "description": "手动触发一次签到或签退，用于测试配置是否正确",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["action"],
+                "properties": {
+                  "action": { "type": "string", "enum": ["sign_in", "sign_out"], "description": "sign_in=签到, sign_out=签退" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "action": { "type": "string" },
+                    "message": { "type": "string" },
+                    "geo": { "type": "object", "description": "逆地理编码结果" },
+                    "jittered": { "type": "object", "description": "抖动后坐标" }
+                  }
+                }
+              }
+            }
+          },
+          "500": { "description": "签到失败" }
+        }
+      }
+    },
+    "/api/photo_sign": {
+      "post": {
+        "tags": ["签到"],
+        "summary": "拍照签到/签退",
+        "description": "模拟小程序拍照签到流程（登录→抖动→拍照上传→提交）",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["action"],
+                "properties": {
+                  "action": { "type": "string", "enum": ["photo_sign_in", "photo_sign_out"], "description": "拍照签到/签退" },
+                  "photo_path": { "type": "string", "description": "照片路径（可选，自动生成空白图）" },
+                  "geo": { "type": "object", "description": "手动指定逆地理编码结果（可选）" },
+                  "jittered_location": {
+                    "type": "object",
+                    "properties": {
+                      "longitude": { "type": "string" },
+                      "latitude": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "拍照签到成功" },
+          "400": { "description": "缺少参数" },
+          "500": { "description": "签到失败" }
+        }
+      }
+    },
+    "/api/status": {
+      "get": {
+        "tags": ["签到"],
+        "summary": "获取系统状态",
+        "description": "返回系统运行状态、定时任务信息、缓存状态",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "auto_mode": { "type": "boolean" },
+                    "schedule": { "type": "object" },
+                    "cache": { "type": "object" },
+                    "daemon_running": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "------------------------------------ 补签 ------------------------------------": {},
+    "/api/supplementary/abnormal_dates": {
+      "get": {
+        "tags": ["补签"],
+        "summary": "获取异常签到日期列表",
+        "parameters": [
+          { "name": "traineeId", "in": "query", "schema": { "type": "string" }, "description": "实习生 ID" }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "type": "array", "items": { "type": "string" }, "description": "异常日期列表，如 [\"2026.06.13\", \"2026.06.14\"]" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supplementary/detail": {
+      "get": {
+        "tags": ["补签"],
+        "summary": "获取补签详情",
+        "parameters": [
+          { "name": "traineeId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "date", "in": "query", "required": true, "schema": { "type": "string" }, "description": "日期，如 2026.06.14" }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "type": "object", "description": "补签详情" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supplementary/submit": {
+      "post": {
+        "tags": ["补签"],
+        "summary": "提交补签申请",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["clock_date", "clock_type", "clock_time", "clock_reason", "address", "location_id", "longitude", "latitude"],
+                "properties": {
+                  "clock_date": { "type": "string", "description": "日期，如 2026.06.14" },
+                  "clock_type": { "type": "string", "enum": ["0", "2"], "description": "0=签到, 2=签退" },
+                  "clock_time": { "type": "string", "description": "时间，如 09:00" },
+                  "clock_reason": { "type": "string", "description": "补签理由" },
+                  "address": { "type": "string", "description": "签到地址" },
+                  "location_id": { "type": "string", "description": "区域编码 adcode" },
+                  "longitude": { "type": "string" },
+                  "latitude": { "type": "string" },
+                  "teacher_role_str": { "type": "string", "description": "审核角色 JSON（可选）" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "action": { "type": "string" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "500": { "description": "补签失败" }
+        }
+      }
+    },
+    "/api/supplementary/ranking_list": {
+      "get": {
+        "tags": ["补签"],
+        "summary": "获取奋斗排行榜",
+        "parameters": [
+          { "name": "traineeId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "months", "in": "query", "schema": { "type": "string" }, "description": "月份，如 2026-07，默认当前月" }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "------------------------------------ 周记/月记 ------------------------------------": {},
+    "/api/journal/submit": {
+      "post": {
+        "tags": ["周记/月记"],
+        "summary": "提交周记/月记",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["blog_title", "blog_body", "start_date", "end_date", "blog_type"],
+                "properties": {
+                  "blog_title": { "type": "string", "description": "标题" },
+                  "blog_body": { "type": "string", "description": "正文" },
+                  "start_date": { "type": "string", "description": "开始日期，如 2026-06-15" },
+                  "end_date": { "type": "string", "description": "结束日期，如 2026-06-21" },
+                  "blog_type": { "type": "string", "enum": ["1", "2"], "description": "1=周记, 2=月记" },
+                  "blog_open_type": { "type": "integer", "description": "可见范围（默认1）" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "blogId": { "type": "string" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/journal/list": {
+      "get": {
+        "tags": ["周记/月记"],
+        "summary": "获取周记/月记列表",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "blog_type", "in": "query", "schema": { "type": "string", "default": "1" }, "description": "1=周记, 2=月记" }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "type": "object", "description": "分页数据 {list, total}" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/journal/records": {
+      "get": {
+        "tags": ["周记/月记"],
+        "summary": "获取本地周记记录",
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "records": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/journal/library": {
+      "get": {
+        "tags": ["周记/月记"],
+        "summary": "获取素材库列表",
+        "parameters": [
+          { "name": "type", "in": "query", "schema": { "type": "string" }, "description": "weekly / monthly" }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "library": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["周记/月记"],
+        "summary": "更新素材库",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["library"],
+                "properties": {
+                  "library": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "素材库已更新" }
+        }
+      },
+      "delete": {
+        "tags": ["周记/月记"],
+        "summary": "删除素材库条目",
+        "parameters": [
+          { "name": "type", "in": "query", "required": true, "schema": { "type": "string" }, "description": "weekly / monthly" },
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "string" }, "description": "条目 ID" }
+        ],
+        "responses": {
+          "200": { "description": "已删除" }
+        }
+      }
+    },
+    "------------------------------------ 记录查询 ------------------------------------": {},
+    "/api/records": {
+      "get": {
+        "tags": ["记录查询"],
+        "summary": "查询签到/签退历史记录",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 2000 } },
+          { "name": "start_date", "in": "query", "schema": { "type": "string" }, "description": "开始日期 YYYY-MM-DD" },
+          { "name": "end_date", "in": "query", "schema": { "type": "string" }, "description": "结束日期 YYYY-MM-DD" },
+          { "name": "action", "in": "query", "schema": { "type": "string" }, "description": "类型筛选: sign_in / sign_out / supplementary_sign_in / supplementary_sign_out / photo_sign_in / photo_sign_out" },
+          { "name": "success", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "状态筛选" }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "records": { "type": "array", "items": { "type": "object" } },
+                    "total": { "type": "integer" },
+                    "page": { "type": "integer" },
+                    "per_page": { "type": "integer" },
+                    "total_pages": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/records/stats": {
+      "get": {
+        "tags": ["记录查询"],
+        "summary": "获取签到统计",
+        "description": "返回总数、成功数、失败数、围栏内数量等统计信息",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "stats": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/requests": {
+      "get": {
+        "tags": ["记录查询"],
+        "summary": "查询 HTTP 请求日志",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 50 } },
+          { "name": "start_date", "in": "query", "schema": { "type": "string" }, "description": "YYYY-MM-DD" },
+          { "name": "end_date", "in": "query", "schema": { "type": "string" }, "description": "YYYY-MM-DD" },
+          { "name": "action", "in": "query", "schema": { "type": "string" }, "description": "动作筛选" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "搜索关键词（纯数字=状态码精确匹配，否则全字段搜索）" }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "logs": { "type": "array", "items": { "type": "object" } },
+                    "total": { "type": "integer" },
+                    "page": { "type": "integer" },
+                    "per_page": { "type": "integer" },
+                    "total_pages": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/sign": {
+      "get": {
+        "tags": ["记录查询"],
+        "summary": "获取系统日志 (sign.log)",
+        "parameters": [
+          { "name": "lines", "in": "query", "schema": { "type": "integer", "default": 500 }, "description": "返回最近 N 行" },
+          { "name": "level", "in": "query", "schema": { "type": "string" }, "description": "日志级别筛选: INFO / WARNING / ERROR" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "搜索关键词" },
+          { "name": "start_date", "in": "query", "schema": { "type": "string" }, "description": "YYYY-MM-DD" },
+          { "name": "end_date", "in": "query", "schema": { "type": "string" }, "description": "YYYY-MM-DD" }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "lines": { "type": "array", "items": { "type": "string" } },
+                    "total": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs": {
+      "get": {
+        "tags": ["记录查询"],
+        "summary": "获取旧版系统日志",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "logs": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/login-history": {
+      "get": {
+        "tags": ["记录查询"],
+        "summary": "获取登录历史",
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50 } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "history": { "type": "array", "items": { "type": "object" } },
+                    "total": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["记录查询"],
+        "summary": "清空登录历史",
+        "responses": {
+          "200": { "description": "已清空" }
+        }
+      }
+    },
+    "------------------------------------ 缓存 ------------------------------------": {},
+    "/api/cache/stats": {
+      "get": {
+        "tags": ["缓存"],
+        "summary": "获取缓存统计",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "stats": {
+                      "type": "object",
+                      "properties": {
+                        "journal_list": { "type": "object" },
+                        "clock_detail": { "type": "object" },
+                        "ranking": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cache/details": {
+      "get": {
+        "tags": ["缓存"],
+        "summary": "获取缓存详情",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "details": {
+                      "type": "object",
+                      "description": "按类型分组的缓存条目 {journal_list: [...], clock_detail: [...], ranking: [...]}"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cache/data": {
+      "get": {
+        "tags": ["缓存"],
+        "summary": "获取指定缓存数据",
+        "parameters": [
+          { "name": "type", "in": "query", "required": true, "schema": { "type": "string", "enum": ["journal_list", "clock_detail", "ranking"] } },
+          { "name": "key", "in": "query", "required": true, "schema": { "type": "string" }, "description": "缓存条目的 key" }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "缓存不存在" }
+        }
+      }
+    },
+    "------------------------------------ 学生数据 ------------------------------------": {},
+    "/api/student/clock_detail": {
+      "get": {
+        "tags": ["学生数据"],
+        "summary": "获取签到详情列表",
+        "parameters": [
+          { "name": "traineeId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "string", "default": "1" } },
+          { "name": "pageSize", "in": "query", "schema": { "type": "string", "default": "10" } },
+          { "name": "startDate", "in": "query", "required": true, "schema": { "type": "string" }, "description": "开始日期" },
+          { "name": "endDate", "in": "query", "required": true, "schema": { "type": "string" }, "description": "结束日期" },
+          { "name": "planId", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "type": "array", "items": { "type": "object" }, "description": "签到列表" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/student/today_clock_status": {
+      "get": {
+        "tags": ["学生数据"],
+        "summary": "获取当天签到状态",
+        "parameters": [
+          { "name": "traineeId", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "type": "object", "description": "当天签到状态详情" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "------------------------------------ 系统 ------------------------------------": {},
+    "/api/health": {
+      "get": {
+        "tags": ["系统"],
+        "summary": "健康检查",
+        "security": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" },
+                    "version": { "type": "string", "example": "2.1.0" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
