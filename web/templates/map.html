@@ -126,6 +126,14 @@
         word-break: break-all;
     }
 
+    /* 禁止缩放控件内图片的浏览器默认拖拽，避免与地图拖拽冲突 */
+    .tmap-zoom-control .tmap-zoom-in {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
 </style>
 {% endblock %}
 
