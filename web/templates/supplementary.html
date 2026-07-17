@@ -715,7 +715,7 @@
 
             // 打卡范围 + 位置检查结果
             if (distance > 0) {
-                const displayDistance = distance / 2;  // 界面显示减半
+                const displayDistance = distance / 1;  // 界面显示
                 html += `<div style="font-size:0.8rem;color:var(--slate);border-top:1px solid rgba(255,182,193,0.3);padding-top:10px;">
                 <i class="fa-solid fa-street-view"></i> 打卡范围：半径 <strong>${displayDistance}</strong> 米
                 ${lat && lng ? ` | 中心坐标：${lat}, ${lng}` : ''}

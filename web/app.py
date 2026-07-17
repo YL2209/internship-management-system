@@ -86,6 +86,8 @@ except ImportError:
     )
     from config_manager import read_config, write_config, validate_config_structure, CONFIG_PATH  # type: ignore
 
+from core.utils.location import resolve_ip_location
+
 from core.utils.cache import (
     load_clock_detail_cache,
     save_clock_detail_cache,
@@ -1706,54 +1708,6 @@ LOGIN_HISTORY_FILE = os.path.join(_get_log_dir(), "login_history.jsonl")
 MAX_LOGIN_HISTORY = 50
 
 # 腾讯 IP 定位 API
-TENCENT_IP_LOCATION_URL = "https://apis.map.qq.com/ws/location/v1/ip"
-
-
-def _resolve_ip_location(ip: str, tencent_key: str) -> dict:
-    """
-    通过腾讯 IP 定位 API 将 IP 地址解析为地理位置。
-
-    参数:
-        ip:          客户端 IP 地址
-        tencent_key: 腾讯地图 WebService API Key
-
-    返回:
-        {"province": "...", "city": "...", "district": "...", "adcode": "...", "lat": ..., "lng": ...}
-        失败返回空字典
-    """
-    if not tencent_key or not ip:
-        return {}
-    # 跳过内网/本地 IP
-    if ip in ("127.0.0.1", "::1", "localhost") or ip.startswith(("192.168.", "10.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.")):
-        return {"city": "内网", "province": "", "district": ""}
-    try:
-        config = read_config()
-        timeout = int(config.get("requestTimeout", 10))
-        resp = _requests.get(
-            TENCENT_IP_LOCATION_URL,
-            params={"ip": ip, "key": tencent_key},
-            timeout=timeout,
-        )
-        if resp.status_code != 200:
-            return {}
-        data = resp.json()
-        if data.get("status") != 0:
-            return {}
-        result = data.get("result", {})
-        ad_info = result.get("ad_info", {})
-        location = result.get("location", {})
-        return {
-            "province": ad_info.get("province", ""),
-            "city": ad_info.get("city", ""),
-            "district": ad_info.get("district", ""),
-            "adcode": str(ad_info.get("adcode", "")),
-            "lat": location.get("lat"),
-            "lng": location.get("lng"),
-        }
-    except (_requests.RequestException, KeyError, TypeError):
-        return {}
-
-
 def _record_login_history(ip: str, ua: str):
     """记录一次登录到历史文件（保留最近 50 条），同时通过腾讯 IP 定位解析地理位置。"""
     # 读取腾讯地图 Key
@@ -1766,7 +1720,7 @@ def _record_login_history(ip: str, ua: str):
         pass
 
     # 解析 IP 地理位置（API 超时 5s，不影响登录流程）
-    ip_location = _resolve_ip_location(ip, tencent_key)
+    ip_location = resolve_ip_location(ip, tencent_key)
 
     record = {
         "time": _time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1948,6 +1902,37 @@ def api_compare_backup():
 def api_health():
     """健康检查端点（无需认证）。"""
     return jsonify({"status": "ok", "service": "sign-in-web-admin"})
+
+
+@app.route("/api/proxy/check", methods=["POST"])
+@token_required
+def api_proxy_check():
+    """测试代理连接是否生效。"""
+    data = request.get_json(silent=True) or {}
+    proxy_ip = data.get("proxy_ip", "").strip()
+    proxy_port = data.get("proxy_port", "").strip()
+    proxy_proto = data.get("proxy_proto", "http").strip()
+    if not proxy_ip or not proxy_port:
+        return jsonify({"success": False, "message": "缺少 proxy_ip 或 proxy_port"}), 400
+    try:
+        from core.utils.proxy_checker import proxy_checker
+        from core.apis.signer import SignInClient
+        config = read_config()
+        p = config.setdefault("proxy", {})
+        p["proxy_ip"] = proxy_ip
+        p["proxy_port"] = proxy_port
+        p["proxy_proto"] = proxy_proto
+        p["enabled"] = True
+        # 先登录获取有效会话
+        session = _requests.Session()
+        client = SignInClient(config, session)
+        args = client.login()
+        result = proxy_checker(args, config)
+        session.close()
+        return jsonify({"success": True, "data": result})
+    except Exception as e:
+        logger.error("代理检测失败: %s", e)
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # ============================================================

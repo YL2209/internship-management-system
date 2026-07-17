@@ -11,7 +11,7 @@ XCX_KEY = "ZsE4rGnjI9PkHqAz2WseDc4RF8Uh7YgVMb5Ke48NemJ4saA6XcQ821fFT061pC"
 XCX_APP_ID = "wx9f1c2e0bbc10673c"
 
 # 小程序的 Referer 标识
-XCX_REFERER_ID = "587"
+XCX_REFERER_ID = "588"
 XCX_REFERER = (
     "https://servicewechat.com/"
     + XCX_APP_ID + "/"
@@ -42,6 +42,9 @@ AMAP_WEB_KEY = "c222383ff12d31b556c3ad6145bb95f4"
 
 # 腾讯地图逆地理编码 Key（内置默认值，可被 config.mapApiKeys.tencent 覆盖）
 TENCENT_MAP_KEY = "GOZBZ-E4L67-6WLXT-PSLBH-2WEZZ-LOFLE"
+
+# 腾讯 IP 定位 API 地址
+TENCENT_IP_LOCATION_URL = "https://apis.map.qq.com/ws/location/v1/ip"
 
 # SM2 国密加密公钥（用于生成 devicecode 请求头，加密设备指纹）
 XCX_SM2_PUBLIC_KEY = "04a3c35de075a2e86f28d52a41989a08e740a82fb96d43d9af8a5509e0a4e837ecb384c44fe1ee95f601ef36f3c892214d45c9b3f75b57556466876ad6052f0f1f"

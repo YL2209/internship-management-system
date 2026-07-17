@@ -51,6 +51,7 @@ from core.utils.requests import (
     _base_xcx_headers,
     _build_security_context,
     _form_post,
+    _get_proxies,
     _require_data,
 )
 
@@ -310,6 +311,11 @@ class SignInClient:
             request_data = {**data, **security["params"]}
 
             t0 = time.time()
+
+            proxies = _get_proxies(self.config)
+            if proxies:
+                logger.info("代理IP：" + proxies.get("http", ""))
+
             resp = requests.post(
                 url=url,
                 headers=headers,
@@ -317,6 +323,7 @@ class SignInClient:
                 params={"t": security["url_token"]},
                 allow_redirects=False,
                 timeout=5,
+                proxies=proxies,
             )
             elapsed = int((time.time() - t0) * 1000)
             res = resp.json()

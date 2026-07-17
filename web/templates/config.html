@@ -26,11 +26,13 @@
         transition: transform 0.25s;
     }
 
-    #cfg-schedule-enabled:checked+.toggle-slider {
+    #cfg-schedule-enabled:checked+.toggle-slider,
+    #cfg-proxy-enabled:checked+.toggle-slider {
         background: var(--rose);
     }
 
-    #cfg-schedule-enabled:checked+.toggle-slider::after {
+    #cfg-schedule-enabled:checked+.toggle-slider::after,
+    #cfg-proxy-enabled:checked+.toggle-slider::after {
         transform: translateX(18px);
     }
 
@@ -39,6 +41,15 @@
     }
 
     #schedule-body.disabled {
+        opacity: 0.45;
+        pointer-events: none;
+    }
+
+    #proxy-body {
+        transition: opacity 0.2s;
+    }
+
+    #proxy-body.disabled {
         opacity: 0.45;
         pointer-events: none;
     }
@@ -181,17 +192,17 @@
         <div class="grid-3 mb-2">
             <div class="form-group">
                 <label class="form-label">每日漂移最小距离 (米)</label>
-                <input type="number" class="form-control" id="cfg-dailyDriftMinMeters" min="1" max="400" step="1" placeholder="上限 400 米">
+                <input type="number" class="form-control" id="cfg-dailyDriftMinMeters" min="1" step="1" placeholder="上限 400 米">
                 <small class="text-muted">漂移+抖动半径 不大于 签到范围</small>
             </div>
             <div class="form-group">
                 <label class="form-label">每日漂移最大距离 (米)</label>
-                <input type="number" class="form-control" id="cfg-dailyDriftMaxMeters" min="1" max="400" step="1" placeholder="上限 400 米">
+                <input type="number" class="form-control" id="cfg-dailyDriftMaxMeters" min="1" step="1" placeholder="上限 400 米">
                 <small class="text-muted">漂移+抖动半径 不大于 签到范围</small>
             </div>
             <div class="form-group">
-                <label class="form-label">电子围栏半径 (米)</label>
-                <input type="number" class="form-control" id="cfg-map_radius" min="50" max="5000" step="10" placeholder="500">
+                <label class="form-label">打卡范围 (半径/米)</label>
+                <input type="number" class="form-control" id="cfg-map_radius" min="1" step="1" placeholder="500">
                 <small class="text-muted">用于地图打卡轨迹的围栏范围，默认500米</small>
             </div>
         </div>
@@ -199,7 +210,7 @@
             <div class="form-group"><label class="form-label">地图服务商</label><select class="form-select"
                     id="cfg-mapProvider">
                     <option value="amap">高德</option>
-                    <option value="tencent">腾讯</option>
+                    <option value="tencent">腾讯（推荐）</option>
                 </select></div>
             <div class="form-group"><label class="form-label">高德 Key</label><input type="text" class="form-control"
                     id="cfg-mapApiKeys-amap"></div>
@@ -258,6 +269,36 @@
                     id="cfg-maxRetries"></div>
         </div>
         <div id="taskList"></div>
+    </div>
+</div>
+
+<!-- 代理设置 -->
+<div class="card mb-2">
+    <div class="card-header flex justify-between">
+        <div class="flex gap-2 align-center">
+            <span>HTTP 代理（测试）</span>
+            <label class="toggle-container"
+                style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.8rem;">
+                <input type="checkbox" id="cfg-proxy-enabled" onchange="toggleProxyFields()" style="display:none">
+                <span class="toggle-slider"></span>
+                <span id="proxy-status-label">已关闭</span>
+            </label>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="testProxy()"><i class="fa-solid fa-flask"></i> 测试连接</button>
+    </div>
+    <div class="card-body disabled" id="proxy-body">
+        <div class="grid-3 mb-2">
+            <div class="form-group"><label class="form-label">协议</label>
+                <select class="form-select" id="cfg-proxy-proto" disabled>
+                    <option value="http">HTTP</option>
+                    <option value="https">HTTPS</option>
+                </select></div>
+            <div class="form-group"><label class="form-label">IP 地址</label>
+                <input type="text" class="form-control" id="cfg-proxy-ip" placeholder="127.0.0.1" disabled></div>
+            <div class="form-group"><label class="form-label">端口</label>
+                <input type="text" class="form-control" id="cfg-proxy-port" placeholder="1080" disabled></div>
+        </div>
+        <div id="proxyTestResult"></div>
     </div>
 </div>
 
@@ -331,6 +372,16 @@
         document.getElementById('autoFields').classList.toggle('hidden', document.getElementById('cfg-auth_mode').value !== 'auto');
         document.getElementById('manualFields').classList.toggle('hidden', document.getElementById('cfg-auth_mode').value !== 'manual');
     }
+    function toggleProxyFields() {
+        var en = document.getElementById('cfg-proxy-enabled').checked;
+        document.getElementById('cfg-proxy-ip').disabled = !en;
+        document.getElementById('cfg-proxy-port').disabled = !en;
+        document.getElementById('cfg-proxy-proto').disabled = !en;
+        document.getElementById('proxy-status-label').textContent = en ? '已开启' : '已关闭';
+        var body = document.getElementById('proxy-body');
+        if (en) body.classList.remove('disabled');
+        else body.classList.add('disabled');
+    }
     function toggleScheduleView() {
         var cb = document.getElementById('cfg-schedule-enabled');
         var body = document.getElementById('schedule-body');
@@ -370,6 +421,12 @@
         var keys = currentConfig.mapApiKeys || {};
         document.getElementById('cfg-mapApiKeys-amap').value = keys.amap || '';
         document.getElementById('cfg-mapApiKeys-tencent').value = keys.tencent || '';
+        var proxy = currentConfig.proxy || {};
+        document.getElementById('cfg-proxy-enabled').checked = !!proxy.enabled;
+        document.getElementById('cfg-proxy-ip').value = proxy.proxy_ip || '';
+        document.getElementById('cfg-proxy-port').value = proxy.proxy_port || '';
+        document.getElementById('cfg-proxy-proto').value = proxy.proxy_proto || 'http';
+        toggleProxyFields();
         var dev = currentConfig.device || {};
         document.getElementById('cfg-device-brand').value = dev.brand || '';
         document.getElementById('cfg-device-model').value = dev.model || '';
@@ -492,12 +549,13 @@
         // ---------- 新增：每日漂移距离校验 ----------
         const driftMin = document.getElementById('cfg-dailyDriftMinMeters').value;
         const driftMax = document.getElementById('cfg-dailyDriftMaxMeters').value;
-        if (!Validator.isIntInRange(driftMin, 1, 400)) {
-            App.toast('每日漂移最小距离必须在 1-200 米之间', 'warning');
+        const map_radius = document.getElementById('cfg-map_radius').value;
+        if (!Validator.isIntInRange(driftMin, 1, map_radius)) {
+            App.toast('每日漂移最小距离必须在 1-' + map_radius + ' 米之间', 'warning');
             return;
         }
-        if (!Validator.isIntInRange(driftMax, 1, 400)) {
-            App.toast('每日漂移最大距离必须在 1-200 米之间', 'warning');
+        if (!Validator.isIntInRange(driftMax, 1, map_radius)) {
+            App.toast('每日漂移最大距离必须在 1-' + map_radius + ' 米之间', 'warning');
             return;
         }
         if (parseInt(driftMin) > parseInt(driftMax)) {
@@ -539,6 +597,7 @@
         c.map_radius = parseInt(document.getElementById('cfg-map_radius').value) || 500;
         c.mapProvider = document.getElementById('cfg-mapProvider').value;
         c.mapApiKeys = { amap: document.getElementById('cfg-mapApiKeys-amap').value, tencent: document.getElementById('cfg-mapApiKeys-tencent').value };
+        c.proxy = { enabled: document.getElementById('cfg-proxy-enabled').checked, proxy_ip: document.getElementById('cfg-proxy-ip').value, proxy_port: document.getElementById('cfg-proxy-port').value, proxy_proto: document.getElementById('cfg-proxy-proto').value };
         c.device = { brand: document.getElementById('cfg-device-brand').value, model: document.getElementById('cfg-device-model').value, system: document.getElementById('cfg-device-system').value, platform: document.getElementById('cfg-device-platform').value };
         c.userAgent = document.getElementById('cfg-userAgent').value;
         if (!c.schedule) c.schedule = {};
@@ -618,6 +677,41 @@
             btnIn.innerHTML = '<i class="fa-solid fa-flask"></i> 测试签到'; btnOut.innerHTML = '<i class="fa-solid fa-flask"></i> 测试签退';
         }
     }
+
+    async function testProxy() {
+        var btn = document.querySelector('[onclick="testProxy()"]');
+        var res = document.getElementById('proxyTestResult');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 测试中...';
+        res.innerHTML = '<p class="text-muted"><i class="fa-solid fa-spinner fa-spin"></i> 正在测试代理连接...</p>';
+        try {
+            var ip = document.getElementById('cfg-proxy-ip').value.trim();
+            var port = document.getElementById('cfg-proxy-port').value.trim();
+            var proto = document.getElementById('cfg-proxy-proto').value;
+            if (!ip || !port) {
+                res.innerHTML = '<p class="text-danger"><i class="fa-solid fa-xmark"></i> 请先填写代理 IP 和端口</p>';
+                return;
+            }
+            var resp = await App.api('/api/proxy/check', {
+                method: 'POST',
+                body: JSON.stringify({ proxy_ip: ip, proxy_port: port, proxy_proto: proto })
+            });
+            if (resp.success) {
+                var info = resp.data || {};
+                var loc = info.city || info.province || '';
+                var ok = info.proxy_status;
+                res.innerHTML = '<p><i class="fa-solid fa-circle-' + (ok ? 'check' : 'xmark') + '"></i> <strong style="color:' + (ok ? 'var(--green)' : 'var(--red)') + '">' + (ok ? '连接成功' : '连接失败（出口 IP 不一致）') + '</strong>' + (loc ? ' <small class="text-muted">' + App.escapeHtml(loc) + '</small>' : '') + '</p>';
+            } else {
+                res.innerHTML = '<p class="text-danger"><i class="fa-solid fa-xmark"></i> ' + App.escapeHtml(resp.message || '请求失败') + '</p>';
+            }
+        } catch (e) {
+            res.innerHTML = '<p class="text-danger"><i class="fa-solid fa-xmark"></i> ' + App.escapeHtml(e.message) + '</p>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-flask"></i> 测试连接';
+        }
+    }
+
     loadConfig();
 </script>
 {% endblock %}

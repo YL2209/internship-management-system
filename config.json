@@ -25,7 +25,7 @@
     "locationJitterMeters": 140,
     "mapApiKeys": {
         "amap": "",
-        "tencent": "GOZBZ-E4L67-6WLXT-PSLBH-2WEZZ-LOFLE"
+        "tencent": ""
     },
     "mapProvider": "tencent",
     "map_radius": 500,

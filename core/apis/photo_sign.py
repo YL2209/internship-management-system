@@ -31,7 +31,7 @@ from core.apis.signer import SignInClient
 from core.config.common import XCX_REFERER
 from core.utils.cache import DEFAULT_CACHE_FILE
 from core.utils.logs import _log_http_request, log_record
-from core.utils.requests import _form_post
+from core.utils.requests import _form_post, _get_proxies
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +276,13 @@ class PhotoSignInManager:
         }
         t0 = time.time()
         timeout = int(self.config.get("requestTimeout", 15))
-        resp = requests.post(url, data=data, files=files, headers=headers, timeout=timeout)
+
+        proxies = _get_proxies(self.config)
+        if proxies:
+            logger.info("代理IP：" + proxies.get("http", ""))
+
+        resp = requests.post(url, data=data, files=files, headers=headers,
+                proxies=proxies, timeout=timeout)
         elapsed = int((time.time() - t0) * 1000)
         _log_http_request(action="上传图片至阿里云 OSS", url=url, method="POST",
                           req_headers=headers, req_body=str(data),

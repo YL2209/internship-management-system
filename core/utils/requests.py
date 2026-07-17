@@ -63,6 +63,25 @@ def _assert_session(response_json):
 
 
 # ------------------------------------------------------------------
+# 代理配置
+# ------------------------------------------------------------------
+
+
+def _get_proxies(config: dict) -> dict | None:
+    """从 config.proxy 构建代理字典，未启用或缺失则返回 None。"""
+    p = config.get("proxy", {})
+    if not p or not p.get("enabled"):
+        return None
+    ip = str(p.get("proxy_ip", "")).strip()
+    port = str(p.get("proxy_port", "")).strip()
+    proto = str(p.get("proxy_proto", "http")).strip()
+    if not ip or not port:
+        return None
+    url = f"{proto}://{ip}:{port}"
+    return {"http": url, "https": url}
+
+
+# ------------------------------------------------------------------
 # 风控 / 签名上下文
 # ------------------------------------------------------------------
 
@@ -155,9 +174,15 @@ def _fetch_security_token(config, fingerprint, args=None, timeout=5, force=False
         url, headers, cookies,
     )
     t0 = time.time()
+
+    proxies = _get_proxies(config)
+    if proxies:
+        logger.info("代理IP：" + proxies.get("http", ""))
+
     response = requests.post(
         url, headers=headers, cookies=cookies,
         data=request_data, timeout=timeout,
+        proxies=proxies,
     )
     elapsed = int((time.time() - t0) * 1000)
     _log_http_request(
@@ -268,11 +293,16 @@ def _form_post(url, data, config, args, include_device_code=False, timeout=5, ac
         )
 
         t0 = time.time()
+        proxies = _get_proxies(config)
+        if proxies:
+            logger.info("代理IP：" + proxies.get("http", ""))
+
         response = requests.post(
             url, headers=headers, cookies=cookies,
             data=request_data,
             params={"t": security["url_token"]},
             timeout=timeout,
+            proxies=proxies,
         )
         elapsed = int((time.time() - t0) * 1000)
         logger.debug("收到响应:%s %s", response, response.text)
