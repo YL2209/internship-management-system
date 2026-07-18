@@ -4,17 +4,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- 通用现代浏览器 -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/logo/logo.svg">
+    <!-- PWA: 主题色（顶栏/状态栏） -->
+    <meta name="theme-color" content="#0084FF" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0058A8" media="(prefers-color-scheme: dark)">
+    <!-- PWA: Windows 8/10 磁贴颜色 -->
+    <meta name="msapplication-TileColor" content="#0084FF">
+    <meta name="msapplication-square150x150logo" content="/static/pwa/icon-150.png">
+    <meta name="msapplication-square310x310logo" content="/static/pwa/icon-310x310.png">
+    <meta name="msapplication-wide310x150logo" content="/static/pwa/icon-310x150.png">
+    <!-- PWA: iOS Web App 模式 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="实习数据">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <!-- 通用现代浏览器 favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/pwa/icon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/pwa/icon-16.png">
+    <link rel="icon" type="image/svg+xml" href="/static/logo/logo.svg">
     <!-- 兼容老旧浏览器 -->
-    <link rel="shortcut icon" href="/static/logo/logo.svg" type="image/x-icon">
+    <link rel="shortcut icon" href="/static/pwa/favicon.ico" type="image/x-icon">
     <!-- 苹果设备 (iOS) 主屏幕图标 -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/logo/logo.svg">
-    <!-- Windows 8/10 磁贴图标 -->
-    <meta name="msapplication-square310x310logo" content="/static/logo/logo.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/pwa/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/pwa/icon-152.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/static/pwa/icon-144.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="/static/pwa/icon-120.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="/static/pwa/icon-114.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="/static/pwa/icon-76.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/static/pwa/icon-72.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="/static/pwa/icon-60.png">
+    <link rel="apple-touch-icon" sizes="57x57" href="/static/pwa/icon-57.png">
+    <!-- PWA: Web App Manifest -->
+    <link rel="manifest" href="/manifest.json">
     <meta property="og:title" content="实习数据管理系统">
-    <meta property="og:image" content="https://naokuo.top/static/logo/logo.svg">
-    <meta property="og:url" content="https://naokuo.top">
+    <meta property="og:image" content="/static/pwa/icon-512.png">
+    <meta property="og:url" content="/">
+    <meta property="og:description" content="实习数据管理系统 - 配置管理、签到记录、日志查看">
     <title>{% block title %}实习数据管理系统{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/icons/fontawesome-free-7.2.0-web/css/all.min.css">
@@ -327,6 +352,40 @@
             isLat: (val) => Validator.isFloatInRange(val, -90, 90),
         };
     </script>
+
+    <!-- PWA: Service Worker 注册 -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            // 等到页面完全加载再注册，避免与首次渲染抢资源
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .then(function (reg) {
+                        // 静默处理即可
+                        reg.addEventListener('updatefound', function () {
+                            var sw = reg.installing;
+                            if (!sw) return;
+                            sw.addEventListener('statechange', function () {
+                                if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // 新版本已就绪，下次启动生效
+                                }
+                            });
+                        });
+                    })
+                    .catch(function (err) {
+                        // 注册失败不影响主功能
+                    });
+
+                // 当旧页面被新 SW 接管时，自动刷新以使用最新资源
+                var refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', function () {
+                    if (refreshing) return;
+                    refreshing = true;
+                    window.location.reload();
+                });
+            });
+        }
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 

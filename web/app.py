@@ -1904,6 +1904,39 @@ def api_health():
     return jsonify({"status": "ok", "service": "sign-in-web-admin"})
 
 
+# ============================================================
+# PWA 静态资源路由
+# ============================================================
+# Service Worker 与 manifest 必须在根路径提供，
+# 否则 Service Worker 的默认 scope 会限制在 /static/，
+# 无法拦截 /admin/* 等页面请求。
+
+@app.route("/sw.js")
+def pwa_service_worker():
+    """提供 Service Worker 脚本（根路径，scope 覆盖全站）。"""
+    return app.send_static_file("sw.js"), 200, {
+        "Service-Worker-Allowed": "/",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+    }
+
+
+@app.route("/manifest.json")
+def pwa_manifest():
+    """提供 PWA manifest（在根路径，浏览器可发现性更好）。"""
+    return app.send_static_file("manifest.json"), 200, {
+        "Content-Type": "application/manifest+json; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+    }
+
+
+@app.route("/offline.html")
+def pwa_offline():
+    """离线回退页（与 sw.js precache 中的 URL 对齐）。"""
+    return app.send_static_file("offline.html"), 200, {
+        "Cache-Control": "public, max-age=86400",
+    }
+
+
 @app.route("/api/proxy/check", methods=["POST"])
 @token_required
 def api_proxy_check():
