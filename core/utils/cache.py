@@ -95,16 +95,17 @@ def _backup_expired_entries(expired_entries: dict, cache_type: str) -> bool:
         return False
 
 # ---------- 清理过期 ----------
-def _clean_expired(cache: dict, ttl: int, cache_type: str) -> dict:
+def _clean_expired(cache: dict, ttl: int, cache_type: str, backup: bool = True) -> dict:
     now_ts = time.time()
     expired = {k: v for k, v in cache.items() if v.get("expire_at", 0) < now_ts}
     if not expired:
         return cache
-    if not _backup_expired_entries(expired, cache_type):
-        logger.warning(f"{cache_type} 过期条目备份失败，跳过清理")
-        return cache
+    if backup:
+        if not _backup_expired_entries(expired, cache_type):
+            logger.warning(f"{cache_type} 过期条目备份失败，跳过清理")
+            return cache
     valid = {k: v for k, v in cache.items() if v.get("expire_at", 0) >= now_ts}
-    logger.info(f"{cache_type} 已清理 {len(expired)} 条过期条目，剩余 {len(valid)} 条")
+    logger.info(f"{cache_type} 已清理 {len(expired)} 条过期条目（{'已备份' if backup else '未备份'}），剩余 {len(valid)} 条")
     return valid
 
 # ---------- 通用加载 ----------
@@ -116,17 +117,24 @@ def _load_cache(filepath: str, lock: threading.Lock) -> dict:
         return cache
 
 # ---------- 通用保存 ----------
-def _save_cache(filepath: str, lock: threading.Lock, cache_type: str, cache: dict) -> None:
+def _save_cache(filepath: str, lock: threading.Lock, cache_type: str, cache: dict, backup: bool = True) -> None:
     with lock:
         ttl = _get_cache_ttl(cache_type)
-        cleaned = _clean_expired(cache, ttl, cache_type)
+        cleaned = _clean_expired(cache, ttl, cache_type, backup=backup)
         _atomic_write_json(filepath, cleaned)
 
 # ---------- 通用清除 ----------
-def _invalidate_cache(filepath: str, lock: threading.Lock, cache_type: str) -> None:
+def _invalidate_cache(filepath: str, lock: threading.Lock, cache_type: str, backup: bool = True) -> None:
     with lock:
         cache = _read_json(filepath)
         if not cache:
+            return
+        if not backup:
+            try:
+                os.unlink(filepath)
+                logger.info(f"已清除缓存文件（未备份）: {filepath}")
+            except OSError as e:
+                logger.error(f"删除缓存文件失败 ({filepath}): {e}")
             return
         if _backup_expired_entries(cache, cache_type):
             try:
@@ -148,10 +156,10 @@ def load_ranking_cache() -> dict:
     return _load_cache(_RANKING_CACHE_FILE, _lock_ranking)
 
 def save_clock_detail_cache(cache: dict) -> None:
-    _save_cache(_CLOCK_DETAIL_CACHE_FILE, _lock_clock_detail, "clock_detail", cache)
+    _save_cache(_CLOCK_DETAIL_CACHE_FILE, _lock_clock_detail, "clock_detail", cache, backup=False)
 
 def save_journal_list_cache(cache: dict) -> None:
-    _save_cache(_JOURNAL_LIST_CACHE_FILE, _lock_journal_list, "journal_list", cache)
+    _save_cache(_JOURNAL_LIST_CACHE_FILE, _lock_journal_list, "journal_list", cache, backup=False)
 
 def save_ranking_cache(cache: dict) -> None:
     _save_cache(_RANKING_CACHE_FILE, _lock_ranking, "ranking", cache)
@@ -160,7 +168,7 @@ def invalidate_ranking_cache() -> None:
     _invalidate_cache(_RANKING_CACHE_FILE, _lock_ranking, "ranking")
 
 def invalidate_clock_detail_cache() -> None:
-    _invalidate_cache(_CLOCK_DETAIL_CACHE_FILE, _lock_clock_detail, "clock_detail")
+    _invalidate_cache(_CLOCK_DETAIL_CACHE_FILE, _lock_clock_detail, "clock_detail", backup=False)
 
 def invalidate_journal_cache(blog_type: str) -> None:
     """清除指定 blog_type 的所有分页缓存（线程安全）"""
@@ -171,12 +179,10 @@ def invalidate_journal_cache(blog_type: str) -> None:
         if not keys_to_delete:
             return
         expired = {k: cache[k] for k in keys_to_delete}
-        if not _backup_expired_entries(expired, "journal_list"):
-            logger.error("备份失败，放弃清除周记列表缓存")
-            return
         for k in keys_to_delete:
             del cache[k]
         _atomic_write_json(_JOURNAL_LIST_CACHE_FILE, cache)
+        logger.info(f"已清除 {len(keys_to_delete)} 条周记缓存（未备份，blog_type={blog_type})")
 
 
 def get_journal_list_cache_stats() -> dict:

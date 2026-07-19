@@ -1270,11 +1270,9 @@ def api_journal_list():
             result = mgr.blog_list(login_args, page=page, blog_type=blog_type)
             session.close()
 
-            # 写入缓存（覆盖前备份旧条目）
+            # 写入缓存（journal_list 不备份旧条目）
             now_ts = _time.time()
             cache = load_journal_list_cache()  # 重新加载，确保拿到最新数据
-            if cache_key in cache:
-                _backup_expired_entries({cache_key: cache[cache_key]}, "journal_list")
             cache[cache_key] = {
                 "data": result,
                 "cached_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -2357,12 +2355,8 @@ def api_student_clock_detail():
 
                     session.close()
 
-                    # -------- 更新缓存（覆盖前备份旧条目）--------
+                    # -------- 更新缓存（clock_detail 不备份旧条目）--------
                     now_ts = _time.time()
-
-                    # 如果该键已存在旧缓存，先备份
-                    if cache_key in cache:
-                        _backup_expired_entries({cache_key: cache[cache_key]}, "clock_detail")
 
                     cache[cache_key] = {
                         "start_date": start_Date,
