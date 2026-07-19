@@ -114,6 +114,69 @@ docker compose up -d
 
 ### 常用命令
 
+- 一键运行
+```YAML
+# ============================================================
+# 实习数据管理系统 — Docker Compose (单容器)
+# ============================================================
+# 快速开始:
+#   cp .env.example .env && vi .env        # 配置环境变量
+#   docker compose up -d                   # 启动
+#   docker compose logs -f                 # 查看日志
+#   docker compose down                    # 停止
+#
+# 服务:
+#   sign-in  — Web 管理后台 + 定时签到守护 (http://localhost:${WEB_PORT:-5000})
+# ============================================================
+
+services:
+  sign-in:
+    image: ghcr.nju.edu.cn/yl2209/internship-management-system:latest
+    container_name: sign-in-docker
+    restart: unless-stopped
+
+    ports:
+      - "${WEB_PORT:-5000}:5000"
+
+    environment:
+      - TZ=Asia/Shanghai
+      - CONFIG_PATH=/app/config.json
+      - LOG_DIR=/app/logs
+      - CACHE_DIR=/app/cache
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=5000
+      - DAEMON_ENABLED=${DAEMON_ENABLED:-true}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH:-}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-8}
+      - LOGIN_RATE_LIMIT=${LOGIN_RATE_LIMIT:-10}
+      - LOGIN_LOCKOUT_SECONDS=${LOGIN_LOCKOUT_SECONDS:-300}
+
+    volumes:
+      - ./config.json:/app/config.json:rw
+      - ./config.default.json:/app/config.default.json:ro
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ./journals:/app/journals
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+```
+
+
 ```bash
 # 启动所有服务（守护进程 + Web）
 docker compose up -d
