@@ -169,23 +169,39 @@ app = create_app()
 
 # ---- 定时签到守护线程 ----
 # DAEMON_ENABLED=true 时在后台启动定时签到调度器
-if os.environ.get("DAEMON_ENABLED", "").lower() in ("1", "true", "yes"):
-    try:
-        import json as _json
-        import atexit as _atexit
+# 模块级引用，供 /api/daemon/status 端点查询状态
+_daemon_scheduler = None
 
-        _config_daemon = read_config()
-        # 动态导入，避免循环依赖
+
+def _try_start_daemon():
+    """尝试启动定时签到守护线程。模块加载时调用一次，也可在配置变更后重试。"""
+    global _daemon_scheduler
+    if _daemon_scheduler is not None:
+        return  # 已在运行，不重复启动
+
+    if os.environ.get("DAEMON_ENABLED", "").lower() not in ("1", "true", "yes"):
+        return
+
+    try:
+        c = read_config()
+        # 延迟导入，避免循环依赖
         if not os.path.dirname(__file__) in sys.path:
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from run import start_daemon_thread as _start_daemon
+        from run import start_daemon_thread
 
-        _scheduler = _start_daemon(_config_daemon, CONFIG_PATH)
-        if _scheduler:
-            _atexit.register(_scheduler.stop)
+        _daemon_scheduler = start_daemon_thread(c, CONFIG_PATH)
+        if _daemon_scheduler:
+            import atexit
+            atexit.register(_daemon_scheduler.stop)
             app.logger.info("✅ 定时签到守护线程已启动")
+        else:
+            app.logger.warning("⚠️ 定时签到守护线程未启动（配置条件不满足）")
     except Exception as _e:
         app.logger.error(f"❌ 守护线程启动失败（不影响 Web 服务）: {_e}")
+
+
+# 模块加载时自动尝试启动
+_try_start_daemon()
 
 # ============================================================
 # 页面路由（HTML 模板）
@@ -1902,6 +1918,47 @@ def api_compare_backup():
 def api_health():
     """健康检查端点（无需认证）。"""
     return jsonify({"status": "ok", "service": "sign-in-web-admin"})
+
+
+@app.route("/api/daemon/status", methods=["GET"])
+def api_daemon_status():
+    """守护进程状态查询 — 动态检测 + 自动重试启动。"""
+    # 自动修复：条件满足但线程未启动时，尝试拉起
+    if _daemon_scheduler is None:
+        _try_start_daemon()
+
+    # 1. 调度器已启动
+    if _daemon_scheduler:
+        return jsonify({
+            "running": True,
+            "reason": "定时签到守护线程运行中",
+            "scheduler_enabled": _daemon_scheduler._enabled,
+            "workdays": _daemon_scheduler._workdays,
+        })
+
+    # 2. DAEMON_ENABLED 未启用
+    if os.environ.get("DAEMON_ENABLED", "").lower() not in ("1", "true", "yes"):
+        return jsonify({
+            "running": False,
+            "reason": "DAEMON_ENABLED 未启用（环境变量未设置，Docker 中默认自动开启）",
+        })
+
+    # 3. DAEMON_ENABLED=true 但启动失败 → 读配置诊断原因
+    try:
+        c = read_config()
+        s = c.get("schedule", {})
+        if not s:
+            reason = "配置中缺少 schedule 字段"
+        elif not s.get("enabled", True):
+            reason = "schedule.enabled = false（请在配置管理页面开启后刷新本页自动重试）"
+        elif not s.get("tasks"):
+            reason = "schedule.tasks 为空（请添加签到/签退任务后刷新本页）"
+        else:
+            reason = "调度器启动失败，请查看系统日志"
+    except Exception:
+        reason = "无法读取配置文件"
+
+    return jsonify({"running": False, "reason": reason})
 
 
 # ============================================================

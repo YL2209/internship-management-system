@@ -2,6 +2,11 @@
 {% block title %}系统日志{% endblock %}
 {% block page_title %}<i class="fa-solid fa-scroll"></i> 系统日志{% endblock %}
 {% block content %}
+<!-- 守护进程状态横幅 -->
+<div id="daemonBanner" class="card" style="margin-bottom:0.75rem; padding:0.7rem 1rem; display:none">
+    <div class="flex align-center gap-2" id="daemonBannerInner"></div>
+</div>
+
 <div class="card">
     <div class="card-header flex justify-between flex-wrap gap-2">
         <span>系统日志 (<small class="text-muted" id="logSummary"></small>) </span>
@@ -49,6 +54,35 @@
 {% block scripts %}
 <script>
 var page = 1;
+
+// ---- 守护进程状态 ----
+(async function loadDaemonStatus() {
+    var banner = document.getElementById('daemonBanner');
+    var inner = document.getElementById('daemonBannerInner');
+    try {
+        var r = await fetch('/api/daemon/status');
+        var s = await r.json();
+        banner.style.display = 'block';
+        if (s.running) {
+            var days = ['', '一','二','三','四','五','六','日'];
+            var wd = (s.workdays || []).map(function(d){return days[d];}).join('、');
+            inner.innerHTML = '<i class="fa-solid fa-circle-check" style="color:var(--green)"></i> ' +
+                '<strong>定时签到守护正在运行</strong> ' +
+                '<span class="text-muted text-sm">工作日: 周' + App.escapeHtml(wd || '?') +
+                (s.scheduler_enabled ? '' : '（但 schedule.enabled=false，暂停执行中）') + '</span>';
+            banner.style.background = 'rgba(126,214,135,0.08)';
+            banner.style.border = '1px solid rgba(126,214,135,0.2)';
+        } else {
+            inner.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color:var(--rose)"></i> ' +
+                '<strong>定时签到未运行</strong> ' +
+                '<span class="text-muted text-sm">' + App.escapeHtml(s.reason || '未知原因') + '</span>';
+            banner.style.background = 'rgba(212,96,112,0.06)';
+            banner.style.border = '1px solid rgba(212,96,112,0.15)';
+        }
+    } catch (e) {
+        banner.style.display = 'none';
+    }
+})();
 
 function lvBadge(l) {
     return l === 'ERROR' ? '<span class="badge badge-danger">ERROR</span>'
