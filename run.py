@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-实习签到辅助工具 — 守护进程入口
+实习签到辅助工具 — 守护进程入口（仅负责定时签到/签退）
 
 用法:
     python run.py --config my_config.json
