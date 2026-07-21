@@ -200,13 +200,14 @@
         padding: 16px 20px;
         border-radius: 14px;
         background: rgba(255, 250, 245, 0.85);
-        transition: background 0.2s;
+        transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
         border: 1px solid rgba(255, 182, 193, 0.7);
     }
 
     .record-item:hover {
-        background: rgba(255, 255, 255, 0.75);
-        border-color: rgba(255, 182, 193, 0.12);
+        border-color: rgba(212, 96, 112, 0.3);
+        box-shadow: 0 8px 32px rgba(212, 96, 112, 0.10);
+        transform: translateY(-2px);
     }
 
     .record-header {
@@ -402,14 +403,15 @@
         <button class="tab-btn" role="tab" onclick="switchTab('submitted')" aria-selected="false">
             <i class="fa-solid fa-list-check"></i> 提交记录</button>
         <button class="tab-btn" role="tab" onclick="switchTab('manual')" aria-selected="false">
-            <i class="fa-solid fa-pen-to-square"></i> 提交周记/月记</button>
+            <i class="fa-solid fa-pen-to-square"></i> 提交周日志</button>
     </nav>
 
     <!-- 素材库 -->
     <div id="tab-library" class="tab-panel active">
         <div class="library-toolbar">
             <select class="field-select" id="library-filter" onchange="loadLibrary(true)">
-                <option value="weekly">周记</option>
+                <option value="daily">日记</option>
+                <option value="weekly" selected>周记</option>
                 <option value="monthly">月记</option>
             </select>
             <button class="btn btn-outline btn-sm" onclick="loadLibrary(true)"><i class="fa-solid fa-rotate"></i>
@@ -438,7 +440,8 @@
         <div class="submit-layout">
             <div class="field"><label class="field-label">类型</label>
                 <select id="manual-type" class="field-select" onchange="updateCharCount();loadRecentSubmitted()">
-                    <option value="weekly">周记</option>
+                    <option value="daily">日记</option>
+                    <option value="weekly" selected>周记</option>
                     <option value="monthly">月记</option>
                 </select>
             </div>
@@ -585,11 +588,16 @@
 
             var resp = await App.api('/api/journal/library?type=' + filter + '&_=' + Date.now());
             if (!resp.success) { grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(resp.message) + '</div>'; return; }
-            var items = (filter === 'weekly' ? resp.library.weekly : resp.library.monthly) || [];
+            var items = (filter === 'daily' ? resp.library.daily : (filter === 'weekly' ? resp.library.weekly : resp.library.monthly)) || [];
             _libraryCache = { filter: filter, items: items };
 
             App.api('/api/journal/library?type=all').then(function (resp) {
-                if (resp.success) { var w = (resp.library.weekly || []).length; var m = (resp.library.monthly || []).length; countEl.textContent = '周' + w + '篇 · 月' + m + '篇'; }
+                if (resp.success) {
+                    var d = (resp.library.daily || []).length;
+                    var w = (resp.library.weekly || []).length;
+                    var m = (resp.library.monthly || []).length;
+                    countEl.textContent = '日' + d + '篇 · 周' + w + '篇 · 月' + m + '篇';
+                }
             });
 
             if (!items.length) { grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-folder-open"></i> 暂无数据</div>'; countEl.textContent = '0篇'; return; }
@@ -612,7 +620,9 @@
     function selectFromLibrary(id) {
         var filter = document.getElementById('library-filter').value;
         App.api('/api/journal/library?type=' + filter).then(function (resp) {
-            var items = (filter === 'weekly' ? resp.library.weekly : resp.library.monthly) || [];
+            // 根据 filter 动态选择对应的库字段，支持 daily、weekly、monthly
+            var items = (filter === 'daily' ? resp.library.daily :
+                         (filter === 'weekly' ? resp.library.weekly : resp.library.monthly)) || [];
             var item = items.find(function (i) { return i.id === id; });
             if (!item) return;
             selectedJournal = item;
@@ -649,7 +659,7 @@
 
     function useSelectedInManual() {
         if (!selectedJournal) return;
-        document.getElementById('manual-type').value = selectedJournal.id.indexOf('weekly_') === 0 ? 'weekly' : 'monthly';
+        document.getElementById('manual-type').value = selectedJournal.id.indexOf('daily_') === 0 ? 'daily' : selectedJournal.id.indexOf('weekly_') === 0 ? 'weekly' : 'monthly';
         document.getElementById('manual-title').value = selectedJournal.title;
         document.getElementById('manual-body').value = selectedJournal.body;
         if (selectedJournal.start_date) document.getElementById('manual-start').value = selectedJournal.start_date.replace(/\./g, '-');
@@ -718,7 +728,7 @@
         var type = document.getElementById('manual-type').value;
         var ot = parseInt(document.getElementById('manual-open-type').value, 10);
 
-        if (type !== 'weekly' && type !== 'monthly') {
+        if (!['daily', 'weekly', 'monthly'].includes(type)) {
             status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> 类型选择错误</span>';
             return;
         }
@@ -745,11 +755,39 @@
 
     async function saveToLibrary(title, body, type, startDate, endDate) {
         var libResp = await App.api('/api/journal/library?type=' + type);
-        var items = (type === 'weekly' ? libResp.library.weekly : libResp.library.monthly) || [];
-        var prefix = type === 'weekly' ? 'weekly_' : 'monthly_';
+
+        // 类型对应的数据字段映射
+        var typeMap = {
+            daily: 'daily',
+            weekly: 'weekly',
+            monthly: 'monthly'
+        };
+        var field = typeMap[type] || 'monthly'; // 防止未知类型
+
+        // 获取对应类型的列表
+        var items = libResp.library[field] || [];
+
+        // id 前缀直接由类型决定
+        var prefix = type + '_';
+
+        // 计算下一个编号
         var maxNum = 0;
-        for (var i = 0; i < items.length; i++) { var num = parseInt(items[i].id.replace(prefix, ''), 10) || 0; if (num > maxNum) maxNum = num; }
-        await App.api('/api/journal/library', { method: 'PUT', body: JSON.stringify({ id: prefix + (maxNum + 1), title: title, body: body, start_date: startDate || '', end_date: endDate || '' }) });
+        for (var i = 0; i < items.length; i++) {
+            var num = parseInt(items[i].id.replace(prefix, ''), 10) || 0;
+            if (num > maxNum) maxNum = num;
+        }
+
+        // 保存新条目
+        await App.api('/api/journal/library', {
+            method: 'PUT',
+            body: JSON.stringify({
+                id: prefix + (maxNum + 1),
+                title: title,
+                body: body,
+                start_date: startDate || '',
+                end_date: endDate || ''
+            })
+        });
     }
 
     async function manualSaveToLibrary() {
@@ -783,7 +821,7 @@
                 var r = records[i];
                 var badge = r.success ? '<span class="badge badge-success">成功</span>' : '<span class="badge badge-danger">失败</span>';
                 html += '<div class="record-item"><div class="record-header"><span class="record-title">' + App.escapeHtml(r.title || '无标题') + '</span>' + badge + '</div>' +
-                    '<div class="record-meta">' + App.formatDate(r.timestamp) + ' | ' + (r.type === 'weekly' ? '周记' : '月记') + ' | ' +
+                    '<div class="record-meta">' + App.formatDate(r.timestamp) + ' | ' + (r.type === 'daily' ? '日记' : (r.type === 'weekly' ? '周记' : '月记')) + ' | ' +
                     App.escapeHtml(r.start_date || '') + ' ~ ' + App.escapeHtml(r.end_date || '') + '</div>' +
                     '<div class="record-body">' + App.escapeHtml((r.body || '').substring(0, 150)) + '</div>' +
                     (r.error ? '<div class="record-error"><i class="fa-solid fa-circle-exclamation"></i> ' + App.escapeHtml(r.error) + '</div>' : '') + '</div>';
@@ -800,8 +838,10 @@
         var container = document.getElementById('recent-submitted');
         var gridEl = document.getElementById('recent-grid');
         var type = document.getElementById('manual-type').value;
-        var blogType = type === 'monthly' ? '2' : '1';
-        if (type !== 'weekly' && type !== 'monthly') {
+        var typeBlogMap = { daily: '0', weekly: '1', monthly: '2' };
+        var blogType = typeBlogMap[type] || '1'; // 未知类型默认当作 weekly
+
+        if (!typeBlogMap.hasOwnProperty(type)) {
             status.innerHTML = '<span style="color:#e74c3c"><i class="fa-solid fa-circle-exclamation"></i> 类型选择错误</span>';
             return;
         }

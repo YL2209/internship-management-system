@@ -693,6 +693,7 @@
             const outIcon = outTime ? '<i class="fa-regular fa-calendar-check" style="color:#27ae60;"></i>' : '<i class="fa-regular fa-calendar-xmark" style="color:#e74c3c;"></i>';
 
             const distance = postInfo.distance || 0;
+            const _address = postInfo.address || '';
             const lat = postInfo.lat || '';
             const lng = postInfo.lng || '';
 
@@ -719,6 +720,7 @@
                 html += `<div style="font-size:0.8rem;color:var(--slate);border-top:1px solid rgba(255,182,193,0.3);padding-top:10px;">
                 <i class="fa-solid fa-street-view"></i> 打卡范围：半径 <strong>${displayDistance}</strong> 米
                 ${lat && lng ? ` | 中心坐标：${lat}, ${lng}` : ''}
+                ${_address ? ` | 打卡地址：${_address}` : ''}
             </div>`;
 
                 // 展示抖动后坐标和范围检查结果（后端已计算）

@@ -197,13 +197,13 @@
     <div class="card">
         <div class="card-header"><i class="fa-solid fa-chart-pie"></i> 素材库与已提交周月记占比</div>
         <div class="card-body">
-            <div id="chartJournalSunburst" style="height:300px"></div>
+            <div id="chartJournalSunburst" style="height:350px"></div>
         </div>
     </div>
     <div class="card">
         <div class="card-header"><i class="fa-solid fa-chart-bar"></i> 周记/月记数量统计</div>
         <div class="card-body">
-            <div id="chartJournalBar" style="height:300px"></div>
+            <div id="chartJournalBar" style="height:350px"></div>
         </div>
     </div>
 </div>
@@ -237,7 +237,21 @@
 {% endblock %}
 {% block scripts %}
 <script>
-    var C = { rose: '#D46070', roseL: '#FFB6C1', peach: '#FFE4E1', pink: '#FFC0CB', green: '#7ED687', red: '#E88787', orange: '#D4A070', dark: '#4A4A4A', slate: '#8B8680', bg: '#FFF8F0', white: '#ffffff' };
+    var C = {
+        rose: '#D46070',
+        roseL: '#FFB6C1',
+        peach: '#FFE4E1',
+        pink: '#FFC0CB',
+        green: '#7ED687',
+        red: '#E88787',
+        orange: '#D4A070',
+        blue: '#7ea6d6',
+        gold: '#F0B27A',      // 新增，自行调整色值
+        dark: '#4A4A4A',
+        slate: '#8B8680',
+        bg: '#FFF8F0',
+        white: '#ffffff'
+    };
     var TT = { backgroundColor: '#fff', borderColor: '#FFE4E1', borderWidth: 1, borderRadius: 8, padding: [8, 12], textStyle: { color: '#4A4A4A', fontSize: 12 }, extraCssText: 'box-shadow:0 4px 16px rgba(212,96,112,0.08)' };
     function emptyOpt(msg) { return { title: { text: msg || '暂无数据', left: 'center', top: 'center', textStyle: { color: C.slate, fontSize: 13, fontWeight: 'normal' } } }; }
 
@@ -414,26 +428,42 @@
 
     // 周记/月记数量统计（素材库）
     // 周记/月记数量统计（环形饼图，类似登录来源城市样式）
-    function renderJournalBar(weekly, monthly) {
+    // 日记/周记/月记数量统计（环形饼图）
+    function renderJournalBar(daily, weekly, monthly) {
         if (!charts.chartJournalBar) return;
+        var dCount = (daily || []).length;
         var wCount = (weekly || []).length;
         var mCount = (monthly || []).length;
-        if (!wCount && !mCount) {
-            charts.chartJournalBar.setOption(emptyOpt('暂无周记数据'));
+        if (!dCount && !wCount && !mCount) {
+            charts.chartJournalBar.setOption(emptyOpt('暂无日记/周记/月记数据'));
             return;
         }
 
-        var total = wCount + mCount;
+        var total = dCount + wCount + mCount;
+
+        // 动态生成数据和颜色，日记为 0 时不显示
+        var dataArr = [];
+        var colorArr = [];
+        var goldColor = C.gold || '#FDC763';   // 兼容 C.gold 不存在的情况
+
+        if (dCount > 0) {
+            colorArr.push(C.rose);
+            dataArr.push({ value: dCount, name: '日记' });
+        }
+        colorArr.push(C.blue);
+        dataArr.push({ value: wCount, name: '周记' });
+        colorArr.push(goldColor);
+        dataArr.push({ value: mCount, name: '月记' });
 
         charts.chartJournalBar.setOption({
-            color: [C.rose, C.orange],   // 周记-玫瑰色，月记-橙色，与登录城市图配色统一
+            color: colorArr,
             tooltip: Object.assign({
                 trigger: 'item',
                 formatter: '{b}: {c} 篇 ({d}%)'
             }, TT),
             series: [{
                 type: 'pie',
-                radius: ['45%', '72%'],          // 环形，与登录来源城市一致
+                radius: ['45%', '72%'],
                 center: ['50%', '50%'],
                 label: {
                     fontSize: 12,
@@ -446,12 +476,9 @@
                         shadowColor: 'rgba(0,0,0,0.08)'
                     }
                 },
-                data: [
-                    { value: wCount, name: '周记' },
-                    { value: mCount, name: '月记' }
-                ]
+                data: dataArr
             }],
-            graphic: total > 0 ? [{   // 中间显示总数（可选，如需保留可启用）
+            graphic: total > 0 ? [{
                 type: 'text',
                 left: 'center',
                 top: 'center',
@@ -465,6 +492,8 @@
             }] : []
         });
     }
+
+
     // ---------- 签到日历图 ----------
     const layouts = [
         [[0, 0]],
@@ -650,7 +679,7 @@
 
             var sunData = [];
             var colorMap = { journal_list: '#D46070', clock_detail: '#16B644', ranking: '#FDC763' };
-            var nameMap = { journal_list: '周月记', clock_detail: '签到', ranking: '排行榜' };
+            var nameMap = { journal_list: '周日志', clock_detail: '签到', ranking: '排行榜' };
 
             ['journal_list', 'clock_detail', 'ranking'].forEach(function (type) {
                 var entries = resp.details[type] || [];
@@ -658,7 +687,11 @@
                 var children = entries.map(function (e) {
                     var label = e.key;
                     if (type === 'journal_list') {
-                        label = label.replace('blog_type_1_', '周记-').replace('blog_type_2_', '月记-').replace('_page_', ' 第') + '页';
+                        // 统一处理 blog_type_0/1/2
+                        label = label.replace(/blog_type_(\d)_page_(\d+)/, function(match, typeNum, pageNum) {
+                            var map = { '0': '日记', '1': '周记', '2': '月记' };
+                            return (map[typeNum] || '') + '第' + pageNum + '页';
+                        });
                     } else if (type === 'clock_detail') {
                         label = e.key;
                     } else if (type === 'ranking') {
@@ -715,72 +748,87 @@
     }
 
     // ---------- 素材库与已提交周月记占比（嵌套饼图） ----------
-    async function renderJournalSunburst(weekly, monthly, submittedList) {
+    // ---------- 素材库与已提交日记/周记/月记占比（嵌套饼图） ----------
+    async function renderJournalSunburst(daily, weekly, monthly, submittedList) {
         if (!charts.chartJournalSunburst) return;
         try {
             if (!submittedList) {
                 var journalResp = await App.api('/api/cache/data?type=journal_list');
                 submittedList = journalResp.success ? journalResp.data : [];
             }
-            var submittedWeekly = 0, submittedMonthly = 0;
+            var submittedDaily = 0, submittedWeekly = 0, submittedMonthly = 0;
             submittedList.forEach(function (item) {
-                if (item.blogType === 'weekly') submittedWeekly++;
+                if (item.blogType === 'daily') submittedDaily++;
+                else if (item.blogType === 'weekly') submittedWeekly++;
                 else if (item.blogType === 'monthly') submittedMonthly++;
             });
 
+            var dailyTotal = (daily || []).length;
             var weeklyTotal = (weekly || []).length;
             var monthlyTotal = (monthly || []).length;
 
-            var innerData = [
-                { value: monthlyTotal - submittedMonthly, name: '月记未提交', itemStyle: { color: '#FDC763' } },
-                { value: submittedMonthly, name: '月记已提交', itemStyle: { color: '#16B644' } }
-            ];
-            var outerData = [
-                { value: weeklyTotal - submittedWeekly, name: '周记未提交', itemStyle: { color: '#D46070' } },
-                { value: submittedWeekly, name: '周记已提交', itemStyle: { color: '#3498db' } }
-            ];
+            var legendData = [];
+            var seriesArr = [];
 
-            charts.chartJournalSunburst.setOption({
-                tooltip: {
-                    trigger: 'item',
-                    formatter: '{a} <br/>{b}: {c} ({d}%)'
-                },
-                legend: {
-                    orient: 'horizontal',
-                    bottom: 0,
-                    data: ['周记未提交', '周记已提交', '月记未提交', '月记已提交']
-                },
-                series: [
-                    {
-                        name: '月记',
-                        type: 'pie',
-                        selectedMode: 'single',
-                        radius: [0, '30%'],
-                        label: {
-                            position: 'inner',
-                            fontSize: 12
-                        },
-                        labelLine: {
-                            show: false
-                        },
-                        data: innerData
-                    },
-                    {
-                        name: '周记',
-                        type: 'pie',
-                        radius: ['45%', '60%'],
-                        labelLine: {
-                            length: 20
-                        },
-                        label: {
-                            formatter: '{b}: {c} ({d}%)'
-                        },
-                        data: outerData
-                    }
+            // 日记层（仅在有数据时添加）
+            if (dailyTotal > 0) {
+                var diaryUnsubmitted = dailyTotal - submittedDaily;
+                var diarySubmitted = submittedDaily;
+                legendData.push('日记未提交', '日记已提交');
+                seriesArr.push({
+                    name: '日记',
+                    type: 'pie',
+                    selectedMode: 'single',
+                    radius: [0, '20%'],
+                    label: { position: 'inner', fontSize: 10 },
+                    labelLine: { show: false },
+                    data: [
+                        { value: diaryUnsubmitted, name: '日记未提交', itemStyle: { color: '#F56C6C' } },
+                        { value: diarySubmitted, name: '日记已提交', itemStyle: { color: '#67C23A' } }
+                    ]
+                });
+            }
+
+            // 月记层（内圈，若无日记则成为最内圈）
+            var monthlyUnsubmitted = monthlyTotal - submittedMonthly;
+            var monthlySubmitted = submittedMonthly;
+            legendData.push('月记未提交', '月记已提交');
+            seriesArr.push({
+                name: '月记',
+                type: 'pie',
+                selectedMode: 'single',
+                radius: dailyTotal > 0 ? ['30%', '45%'] : [0, '30%'],   // 动态半径
+                label: { position: 'inner', fontSize: 12 },
+                labelLine: { show: false },
+                data: [
+                    { value: monthlyUnsubmitted, name: '月记未提交', itemStyle: { color: '#FDC763' } },
+                    { value: monthlySubmitted, name: '月记已提交', itemStyle: { color: '#16B644' } }
                 ]
             });
+
+            // 周记层（外圈）
+            var weeklyUnsubmitted = weeklyTotal - submittedWeekly;
+            var weeklySubmitted = submittedWeekly;
+            legendData.push('周记未提交', '周记已提交');
+            seriesArr.push({
+                name: '周记',
+                type: 'pie',
+                radius: dailyTotal > 0 ? ['55%', '70%'] : ['45%', '60%'],
+                labelLine: { length: 25 },
+                label: { fontSize: 12, formatter: '{b}: {c} ({d}%)' },
+                data: [
+                    { value: weeklyUnsubmitted, name: '周记未提交', itemStyle: { color: '#D46070' } },
+                    { value: weeklySubmitted, name: '周记已提交', itemStyle: { color: '#3498db' } }
+                ]
+            });
+
+            charts.chartJournalSunburst.setOption({
+                tooltip: { trigger: 'item', formatter: '{a} <br/>{b}: {c} ({d}%)' },
+                legend: { orient: 'horizontal', bottom: 0, data: legendData },
+                series: seriesArr
+            });
         } catch (e) {
-            console.error('加载周记占比图失败:', e);
+            console.error('加载日记/周记/月记占比图失败:', e);
             charts.chartJournalSunburst.setOption(emptyOpt('加载失败'));
         }
     }
@@ -879,36 +927,43 @@
             // 周记/月记统计
             try {
                 var libResp = await App.api('/api/journal/library?type=all');
-                var weekly = [], monthly = [];
+                var daily = [], weekly = [], monthly = [];
                 if (libResp.success && libResp.library) {
+                    daily = libResp.library.daily || [];
                     weekly = libResp.library.weekly || [];
                     monthly = libResp.library.monthly || [];
+
+                    // document.getElementById('statDaily').textContent = daily.length + '篇';
                     document.getElementById('statWeekly').textContent = weekly.length + '篇';
                     document.getElementById('statMonthly').textContent = monthly.length + '篇';
-                    if (weekly.length) { var w = weekly[weekly.length - 1]; document.getElementById('sysLastWeekly').textContent = (w.start_date || '?') + ' ~ ' + (w.end_date || '?'); }
-                    if (monthly.length) { var m = monthly[monthly.length - 1]; document.getElementById('sysLastMonthly').textContent = (m.start_date || '?') + ' ~ ' + (m.end_date || '?'); }
+
+                    // if (daily.length) {
+                    //     var d = daily[daily.length - 1];
+                    //     document.getElementById('sysLastDaily').textContent = (d.start_date || '?') + ' ~ ' + (d.end_date || '?');
+                    // }
+                    if (weekly.length) {
+                        var w = weekly[weekly.length - 1];
+                        document.getElementById('sysLastWeekly').textContent = (w.start_date || '?') + ' ~ ' + (w.end_date || '?');
+                    }
+                    if (monthly.length) {
+                        var m = monthly[monthly.length - 1];
+                        document.getElementById('sysLastMonthly').textContent = (m.start_date || '?') + ' ~ ' + (m.end_date || '?');
+                    }
                 }
                 var recResp = await App.api('/api/journal/records');
                 if (recResp.success && recResp.records) {
                     document.getElementById('statSubmitted').textContent = recResp.records.filter(function (r) { return r.success; }).length + '次';
                 }
 
-                // 获取已提交列表（供日历和饼图使用）
+                // 获取已提交列表
                 var journalResp = await App.api('/api/cache/data?type=journal_list');
                 var submittedList = journalResp.success ? journalResp.data : [];
 
-                // 提交日历
-                // var calItems = submittedList.map(function (item) {
-                //     return { start_date: (item.startDate || '').replace(/\./g, '-'), blogType: item.blogType };
-                // });
-                // renderJournalCal(calItems);
-                renderJournalCal(submittedList);  // 直接传入原始数组
+                renderJournalCal(submittedList);
 
-                // 嵌套饼图
-                await renderJournalSunburst(weekly, monthly, submittedList);
-
-                // 数量统计
-                renderJournalBar(weekly, monthly);
+                // 图表函数需同步支持 daily（参数顺序建议：daily, weekly, monthly, submittedList）
+                await renderJournalSunburst(daily, weekly, monthly, submittedList);
+                renderJournalBar(daily, weekly, monthly);
             } catch (e) { console.error(e); }
 
             // 签到日历 & 奋斗榜

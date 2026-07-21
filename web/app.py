@@ -883,7 +883,7 @@ def api_journal_submit():
         "body": "周记正文",
         "start_date": "2026-06-15",
         "end_date": "2026-06-21",
-        "type": "weekly"|"monthly",
+        "type": "daily"|"weekly"|"monthly",
         "blog_open_type": 1
     }
     """
@@ -994,8 +994,8 @@ def api_journal_submit():
         if not start_date or not end_date:
             return jsonify({"success": False, "message": "无法获取日期范围，请手动填写"}), 400
 
-        # -------------- 提交日记 --------------
-        blog_type = "2" if journal_type == "monthly" else "1"
+        # -------------- 提交周日志 --------------
+        blog_type = "0" if journal_type == "daily" else ("2" if journal_type == "monthly" else "1")
         try:
             result = mgr.submit_blog(
                 login_args, title, body, start_date, end_date,
@@ -1048,15 +1048,18 @@ def api_journal_library():
         result = {"meta": db.get("meta", {})}
 
         if filter_type == "all":
+            result["daily"] = db.get("daily", [])
             result["weekly"] = db.get("weekly", [])
             result["monthly"] = db.get("monthly", [])
+        elif filter_type == "daily":
+            result["daily"] = db.get("daily", [])
         elif filter_type == "weekly":
             result["weekly"] = db.get("weekly", [])
         elif filter_type == "monthly":
             result["monthly"] = db.get("monthly", [])
 
         # 分页（仅对 single type 时生效）
-        if page and filter_type in ("weekly", "monthly"):
+        if page and filter_type in ("daily", "weekly", "monthly"):
             key = filter_type
             items = result.get(key, [])
             start = (page - 1) * per_page
@@ -1116,7 +1119,7 @@ def api_journal_update_entry():
         with open(db_path, "r", encoding="utf-8") as f:
             db = json.load(f)
 
-        kind = "weekly" if entry_id.startswith("weekly_") else "monthly"
+        kind = 'daily' if entry_id.startswith('daily_') else ('weekly' if entry_id.startswith('weekly_') else 'monthly')
         items = db.get(kind, [])
         found = False
         for item in items:
@@ -1136,26 +1139,38 @@ def api_journal_update_entry():
             # 条目不存在则创建新条目
             new_entry = {
                 "id": entry_id,
-                "title": new_title or entry_id.replace("_", " 第") + "篇",
+                "title": new_title or "",
                 "body": new_body,
                 "char_count": len(new_body),
                 "start_date": start_date,
                 "end_date": end_date,
             }
-            # 如果是周记，添加 week 字段
-            if kind == "weekly":
-                week_match = _re.search(r'weekly_(\d+)', entry_id)
-                new_entry["week"] = int(week_match.group(1)) if week_match else 999
+            # 生成默认标题
+            if not new_title:
+                type_names = {'daily': '日记', 'weekly': '周记', 'monthly': '月记'}
+                match = _re.search(r'\d+', entry_id)
+                num = match.group() if match else '?'
+                new_entry['title'] = f"{type_names[kind]} 第{num}篇"
+
+            # 按类型添加编号字段
+            if kind == 'daily':
+                match = _re.search(r'daily_(\d+)', entry_id)
+                new_entry['day'] = int(match.group(1)) if match else 999
+            elif kind == 'weekly':
+                match = _re.search(r'weekly_(\d+)', entry_id)
+                new_entry['week'] = int(match.group(1)) if match else 999
             else:
-                month_match = _re.search(r'monthly_(\d+)', entry_id)
-                new_entry["month"] = int(month_match.group(1)) if month_match else 999
+                match = _re.search(r'monthly_(\d+)', entry_id)
+                new_entry['month'] = int(match.group(1)) if match else 999
+
             items.append(new_entry)
             # 按编号排序
-            sort_key = "week" if kind == "weekly" else "month"
+            sort_key = 'day' if kind == 'daily' else ('week' if kind == 'weekly' else 'month')
             items.sort(key=lambda x: x.get(sort_key, 0))
 
         # 更新 meta 计数
         if "meta" in db:
+            db["meta"]["daily_count"] = len(db.get("daily", []))
             db["meta"]["weekly_count"] = len(db.get("weekly", []))
             db["meta"]["monthly_count"] = len(db.get("monthly", []))
 
@@ -1191,7 +1206,7 @@ def api_journal_delete_entry():
         with open(db_path, "r", encoding="utf-8") as f:
             db = json.load(f)
 
-        kind = "weekly" if entry_id.startswith("weekly_") else "monthly"
+        kind = 'daily' if entry_id.startswith('daily_') else ('weekly' if entry_id.startswith('weekly_') else 'monthly')
         items = db.get(kind, [])
         new_items = [item for item in items if item.get("id") != entry_id]
         if len(new_items) == len(items):
@@ -1199,6 +1214,7 @@ def api_journal_delete_entry():
 
         db[kind] = new_items
         if "meta" in db:
+            db["meta"]["daily_count"] = len(db.get("daily", []))
             db["meta"]["weekly_count"] = len(db.get("weekly", []))
             db["meta"]["monthly_count"] = len(db.get("monthly", []))
 
@@ -1238,8 +1254,8 @@ def api_journal_list():
         blog_type = request.args.get("blog_type", "1").strip()
         force = request.args.get("force", "0").strip() == "1"
 
-        if blog_type not in ("1", "2"):
-            return jsonify({"success": False, "message": "blog_type 必须为 1 或 2"}), 400
+        if blog_type not in ("0", "1", "2"):
+            return jsonify({"success": False, "message": "blog_type 必须为 0 或 1 或 2"}), 400
 
         # 缓存键提前定义（确保任何分支都可用）
         cache_key = f"blog_type_{blog_type}_page_{page}"
@@ -2664,10 +2680,14 @@ def api_cache_data():
                 if key.startswith("blog_type_"):
                     parts = key.split("_")
                     blog_type = parts[2] if len(parts) > 2 else "1"
-                blog_type_label = "weekly" if blog_type == "1" else "monthly"
+                blog_type_label = "daily" if blog_type == "0" else ("weekly" if blog_type == "1" else "monthly")
 
                 data = entry.get("data", {})
-                page_list = data.get("list", [])
+                if not isinstance(data, dict):
+                    page_list = []  # data 是字符串（如 "列表为空"），无数据
+                else:
+                    page_list = data.get("list", [])
+
                 for item in page_list:
                     items.append({
                         "blogTitle": item.get("blogTitle", ""),

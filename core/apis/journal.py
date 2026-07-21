@@ -141,7 +141,6 @@ class JournalManager:
         url = "https://xcx.xybsyw.com/student/blog/LoadBlogDate!weekYear.action"
         data = {"traineeId": str(args.get("traineeId", ""))}
 
-        t0 = time.time()
         timeout = int(self.config.get("requestTimeout", 10))
         resp = _form_post(url, data, config=self.config, args=args, include_device_code=False, timeout=timeout, action="加载周记年份和月份")
         res = resp.json()
@@ -168,7 +167,6 @@ class JournalManager:
             "traineeId": str(args.get("traineeId", "")), "id": "",
         }
 
-        t0 = time.time()
         timeout = int(self.config.get("requestTimeout", 10))
         resp = _form_post(url, data, config=self.config, args=args, include_device_code=False, timeout=timeout, action="加载指定年月下的周信息")
         res = resp.json()
@@ -192,7 +190,6 @@ class JournalManager:
         url = "https://xcx.xybsyw.com/student/blog/LoadBlogDate!month.action"
         data = {"traineeId": str(args.get("traineeId", "")), "id": ""}
 
-        t0 = time.time()
         timeout = int(self.config.get("requestTimeout", 10))
         resp = _form_post(url, data, config=self.config, args=args, include_device_code=False, timeout=timeout, action="月记日期加载")
         res = resp.json()
@@ -216,7 +213,8 @@ class JournalManager:
         使用 _form_post（范式 A），include_device_code=True。
         """
         tid = trainee_id or str(args.get("traineeId", ""))
-        action_label = "提交周记" if blog_type == "1" else "提交月记"
+        label_map = {"0": "提交日记", "1": "提交周记", "2": "提交月记"}
+        action_label = label_map.get(blog_type, "提交日记")  # 第二个参数可设默认值
         url = "https://xcx.xybsyw.com/student/blog/Blog!save.action"
 
         data = {
@@ -234,7 +232,6 @@ class JournalManager:
         }
 
         try:
-            t0 = time.time()
             timeout = int(self.config.get("requestTimeout", 10))
             resp = _form_post(
                 url, data, config=self.config, args=args,
@@ -278,7 +275,6 @@ class JournalManager:
             "reviewStatus": "null", "page": str(page),
         }
 
-        t0 = time.time()
         timeout = int(self.config.get("requestTimeout", 10))
         resp = _form_post(
             url, data, config=self.config, args=args,
@@ -290,6 +286,9 @@ class JournalManager:
             self._clear_session_cache()
             raise RuntimeError("JSESSIONID 已失效")
         if res.get("code") == "200" and "data" in res:
+            if res.get("data") is None:
+                logger.info(f"周日志列表信息：{res["msg"]}")
+                return res["msg"]
             return res["data"]
         raise RuntimeError(f"获取列表失败: {res.get('msg', 'Unknown error')}")
 
