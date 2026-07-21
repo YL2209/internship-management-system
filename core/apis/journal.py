@@ -286,10 +286,18 @@ class JournalManager:
             self._clear_session_cache()
             raise RuntimeError("JSESSIONID 已失效")
         if res.get("code") == "200" and "data" in res:
-            if res.get("data") is None:
-                logger.info(f"周日志列表信息：{res["msg"]}")
-                return res["msg"]
-            return res["data"]
+            data = res["data"]
+            # 外部接口可能返回 None, 字符串 "None" 或空字符串，均视为无数据
+            if data is None or data == "None" or data == "":
+                logger.info(f"日志列表信息：{res.get('msg', '无数据')}")
+                # 返回一个空数据字典，格式与有数据时保持一致
+                return {
+                    "list": [],
+                    "page": str(page),
+                    "total": "0",
+                    "maxPage": "1"
+                }
+            return data
         raise RuntimeError(f"获取列表失败: {res.get('msg', 'Unknown error')}")
 
     # ------------------------------------------------------------------
