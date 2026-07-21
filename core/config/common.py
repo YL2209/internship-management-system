@@ -11,7 +11,7 @@ XCX_KEY = "ZsE4rGnjI9PkHqAz2WseDc4RF8Uh7YgVMb5Ke48NemJ4saA6XcQ821fFT061pC"
 XCX_APP_ID = "wx9f1c2e0bbc10673c"
 
 # 小程序的 Referer 标识
-XCX_REFERER_ID = "588"
+XCX_REFERER_ID = "590"
 XCX_REFERER = (
     "https://servicewechat.com/"
     + XCX_APP_ID + "/"

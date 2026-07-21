@@ -18,3 +18,4 @@ waitress>=3.0.0
 # 图片处理（拍照签到预览）
 Pillow>=10.0.0
 
+requests
