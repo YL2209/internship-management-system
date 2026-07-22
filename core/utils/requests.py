@@ -162,7 +162,17 @@ def _fetch_security_token(config, fingerprint, args=None, timeout=5, force=False
             pass
 
     url = "https://xcx.xybsyw.com/common/GetToken.action"
-    headers = _base_xcx_headers(config)
+
+    # 根据 args 是否存在 sessionId 和 encryptValue 选择 headers 构造方式
+    if args and args.get("sessionId") and args.get("encryptValue"):
+        headers = _form_post_headers(config, args, True)
+    else:
+        headers = {
+            **_base_xcx_headers(config),
+            "n": XCX_N_HEADER,
+            "wechat": "1",
+        }
+
     cookies = (
         {"JSESSIONID": args["sessionId"]}
         if args and args.get("sessionId")
@@ -188,10 +198,12 @@ def _fetch_security_token(config, fingerprint, args=None, timeout=5, force=False
     _log_http_request(
         action="获取安全 token", url=url, method="POST",
         req_headers=headers, req_params={},
+        req_cookies=cookies,
         req_body=json.dumps(request_data),
         resp_status=int(response.json().get("code")) or response.status_code,
         resp_body=response.text, duration_ms=elapsed,
     )
+
     logger.debug("收到风控Token响应: %s %s", response, response.text)
     data = _require_data(response, "获取小程序风控Token失败")
     if not data:
