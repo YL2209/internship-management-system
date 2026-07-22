@@ -684,7 +684,7 @@ def api_test_sign():
         session.close()
 
         if result["success"]:
-            invalidate_clock_detail_cache()
+            invalidate_clock_detail_cache(datetime.now().strftime("%Y.%m.%d"))
 
         return jsonify({
             "success": result["success"],
@@ -777,7 +777,7 @@ def api_photo_sign():
 
         # 清除签到详情缓存，确保页面刷新后可见最新状态
         if result:
-            invalidate_clock_detail_cache()
+            invalidate_clock_detail_cache(datetime.now().strftime("%Y.%m.%d"))
 
         return jsonify({
             "success": True,
@@ -2315,28 +2315,7 @@ def api_student_clock_detail():
 
         try:
             if fetch_all:
-                # -------- 检查缓存 --------
-                cache = load_clock_detail_cache()
-                cache_key = f"{start_Date}_{end_Date}"
-                cached = cache.get(cache_key)
-
-                if cached and cached.get("expire_at", 0) > _time.time() and cached.get("data"):
-                    logger.info(f"命中签到详情缓存: {start_Date}~{end_Date}, 记录数 {len(cached['data'])}")
-                    session.close()
-                    return jsonify({
-                        "success": True,
-                        "data": cached["data"],
-                        "from_cache": True,
-                        "cache_time": cached.get("cached_at", "")
-                    })
-
-                try:
-                    login_args = mgr.login()
-                except Exception as e:
-                    session.close()
-                    return jsonify({"success": False, "message": f"登录失败: {str(e)}"}), 500
-
-                # -------- 无缓存，全量请求（带随机延迟）--------
+                # -------- 检查缓存（按天粒度）--------
                 date_fmt = "%Y.%m.%d"
                 start_dt = datetime.strptime(start_Date, date_fmt).date()
                 today = date.today()
@@ -2345,44 +2324,124 @@ def api_student_clock_detail():
                     session.close()
                     return jsonify({"success": True, "data": [], "from_cache": False})
 
-                days_count = (today - start_dt).days + 1
-                total_pages = (days_count + page_size_int - 1) // page_size_int
+                cache = load_clock_detail_cache()
+                now_ts = _time.time()
 
-                logger.info(f"全量获取签到详情: {start_Date} 至 {today.strftime(date_fmt)}，"
-                            f"共 {days_count} 天，预计 {total_pages} 页")
+                # 逐天检查：收集缺失或过期的日期
+                missing_dates = []
+                merged_cached = []
+                all_hit = True
 
-                all_data = []
+                d = start_dt
+                while d <= today:
+                    day_key = d.strftime(date_fmt)
+                    entry = cache.get(day_key)
+                    if entry and entry.get("data"):
+                        expire = entry.get("expire_at", 0)
+                        # expire_at=0 表示历史日期，永不过期；否则检查是否在有效期内
+                        if expire == 0 or expire > now_ts:
+                            merged_cached.extend(entry["data"])
+                        else:
+                            missing_dates.append(day_key)
+                            all_hit = False
+                    else:
+                        missing_dates.append(day_key)
+                        all_hit = False
+                    d += date.resolution
+
+                # 全部命中 → 直接返回缓存
+                if all_hit and merged_cached:
+                    logger.info(f"命中签到详情缓存（按天）: {start_Date}~{today.strftime(date_fmt)}, "
+                                f"记录数 {len(merged_cached)}")
+                    session.close()
+                    # 取最新的 cached_at
+                    latest_cached = max(
+                        (cache.get(d.strftime(date_fmt), {}).get("cached_at", "")
+                         for d in [start_dt + date.resolution * i
+                                   for i in range((today - start_dt).days + 1)]),
+                        default=""
+                    )
+                    return jsonify({
+                        "success": True,
+                        "data": merged_cached,
+                        "from_cache": True,
+                        "cache_time": latest_cached,
+                    })
+
+                logger.info(f"签到详情缓存缺失/过期: {len(missing_dates)} 天 "
+                            f"({', '.join(missing_dates[:5])}{'...' if len(missing_dates) > 5 else ''})")
+
+                # -------- 登录 --------
                 try:
-                    for page_num in range(1, total_pages + 1):
-                        if page_num > 1:
-                            delay = random.uniform(1.5, 3.0)
-                            logger.info(f"延迟 {delay:.1f}s 后请求第 {page_num} 页...")
-                            _time.sleep(delay)
+                    login_args = mgr.login()
+                except Exception as e:
+                    session.close()
+                    return jsonify({"success": False, "message": f"登录失败: {str(e)}"}), 500
 
-                        page_data = mgr.load_student_clock_detail(
-                            login_args, start_Date, end_Date,
-                            str(page_num), str(page_size_int)
-                        )
-                        if not page_data:
-                            logger.info(f"第 {page_num} 页无数据，停止获取")
-                            break
-                        all_data.extend(page_data)
-                        logger.info(f"第 {page_num} 页获取成功，累计 {len(all_data)} 条")
+                # -------- 拉取数据（混合策略）--------
+                all_data = []
+                BULK_THRESHOLD = 10  # 超过此天数改用分页批量拉
+
+                try:
+                    if len(missing_dates) <= BULK_THRESHOLD:
+                        # 逐天单拉：每天一页，延迟短
+                        logger.info(f"逐天拉取 {len(missing_dates)} 天签到详情")
+                        for date_str in missing_dates:
+                            delay = random.uniform(0.4, 0.8)
+                            _time.sleep(delay)
+                            page_data = mgr.load_student_clock_detail(
+                                login_args, date_str, date_str, "1", "10"
+                            )
+                            if page_data:
+                                all_data.extend(page_data)
+                    else:
+                        # 分页批量拉：逐页请求直到返回空数据（API 按记录数分页，不能预知总页数）
+                        logger.info(f"分页批量拉取签到详情: {start_Date} 至 {today.strftime(date_fmt)}，"
+                                    f"缺失 {len(missing_dates)} 天")
+                        page_num = 1
+                        while True:
+                            if page_num > 1:
+                                delay = random.uniform(1.5, 3.0)
+                                logger.info(f"延迟 {delay:.1f}s 后请求第 {page_num} 页...")
+                                _time.sleep(delay)
+                            page_data = mgr.load_student_clock_detail(
+                                login_args, start_Date, end_Date,
+                                str(page_num), str(page_size_int)
+                            )
+                            if not page_data:
+                                logger.info(f"第 {page_num} 页无数据，全部获取完成")
+                                break
+                            all_data.extend(page_data)
+                            logger.info(f"第 {page_num} 页获取成功，累计 {len(all_data)} 条")
+                            page_num += 1
 
                     session.close()
 
-                    # -------- 更新缓存（clock_detail 不备份旧条目）--------
-                    now_ts = _time.time()
+                    # -------- 写入缓存（按 clockDate 拆分到每天 key）--------
+                    by_date = {}
+                    for item in all_data:
+                        cd = item.get("clockDate", "")
+                        if cd:
+                            by_date.setdefault(cd, []).append(item)
 
-                    cache[cache_key] = {
-                        "start_date": start_Date,
-                        "end_date": end_Date,
-                        "data": all_data,
-                        "cached_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "expire_at": now_ts + _get_cache_ttl("clock_detail")  # 独立的 TTL
-                    }
-                    # 保存（内部自动清理过期、线程安全写入）
+                    cache = load_clock_detail_cache()  # 重新加载，避免并发覆盖
+                    ttl = _get_cache_ttl("clock_detail")
+                    today_str = today.strftime(date_fmt)
+                    yesterday_str = (today - date.resolution).strftime(date_fmt)
+
+                    for day_key in sorted(by_date):
+                        items = by_date[day_key]
+                        entry = {
+                            "data": items,
+                            "cached_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        }
+                        # 只有今天和昨天设置过期时间（数据可能变更），历史日期永不过期
+                        if day_key == today_str or day_key == yesterday_str:
+                            entry["expire_at"] = now_ts + ttl
+                        cache[day_key] = entry
                     save_clock_detail_cache(cache)
+                    logger.info(f"签到详情缓存已更新: {len(by_date)} 天, 共 {len(all_data)} 条")
+
                 except Exception as e:
                     session.close()
                     return jsonify({"success": False, "message": str(e)}), 500
@@ -2712,49 +2771,37 @@ def api_cache_data():
             cache = _read_json(_CLOCK_DETAIL_CACHE_FILE)
             items = []
 
-            # ---- 选择 end_date 最大的缓存条目 ----
+            # 兼容新旧两种 key 格式：
+            #   旧: "2026.06.01_2026.07.21" → 含 _ 的大范围 key
+            #   新: "2026.07.22"           → 单日 key
 
-            latest_entry = None
-            latest_end_date = ""
+            # 优先使用新格式：合并所有单日 key 的 data
             for key, entry in cache.items():
-                if "_" not in key:
+                data = entry.get("data")
+                if not isinstance(data, list):
                     continue
-                parts = key.split("_")
-                if len(parts) != 2:
-                    continue
-                # 跳过空数据
-                if not entry.get("data"):
-                    continue
-                end_date = parts[1]
-                if end_date > latest_end_date:
-                    latest_end_date = end_date
-                    latest_entry = entry
+                for item in data:
+                    if isinstance(item, dict) and item.get("clockDate"):
+                        items.append(item)
 
-            if latest_entry:
-                data_list = latest_entry.get("data", [])
-                seen = set()
-                for row in data_list:
-                    d = row.get("clockDate", "")
-                    sid = str(row.get("studentId", ""))
-                    unique_key = f"{d}_{sid}"
-                    if unique_key in seen:
+            # 如果新格式没有数据，回退到旧格式（向后兼容）
+            if not items:
+                for key, entry in cache.items():
+                    if "_" not in key:
                         continue
-                    seen.add(unique_key)
+                    data = entry.get("data")
+                    if isinstance(data, list):
+                        items.extend(data)
 
-                    items.append({
-                        "clockDate": d,
-                        "studentId": sid,
-                        "clockInStatus": row.get("clockInStatus") or "无",
-                        "clockDInTime": row.get("clockDInTime", ""),
-                        "clockOutStatus": row.get("clockOutStatus") or "无",
-                        "clockOutTime": row.get("clockOutTime", ""),
-                        "unClockNum": row.get("unClockNum", 0),
-                        "supplementaryNum": row.get("supplementaryNum", 0),
-                        "auditStatus": row.get("auditStatus", ""),
-                        "clockStatus": row.get("clockStatus", 0),
-                    })
-
-            items = items[:limit]
+            # 去重（按 id）
+            seen = set()
+            unique_items = []
+            for item in items:
+                rid = item.get("id")
+                if rid is not None and rid not in seen:
+                    seen.add(rid)
+                    unique_items.append(item)
+            items = unique_items[:limit]
 
         else:  # ranking
             cache = _read_json(_RANKING_CACHE_FILE)

@@ -864,6 +864,8 @@
                 return;
             }
             const data = resp.data || [];
+            // 最新日期放上面
+            data.sort((a, b) => (b.clockDate || '').localeCompare(a.clockDate || ''));
             const fromCache = resp.from_cache;
             const cacheTime = resp.cache_time || '';
 

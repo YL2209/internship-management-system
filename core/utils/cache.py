@@ -97,14 +97,17 @@ def _backup_expired_entries(expired_entries: dict, cache_type: str) -> bool:
 # ---------- 清理过期 ----------
 def _clean_expired(cache: dict, ttl: int, cache_type: str, backup: bool = True) -> dict:
     now_ts = time.time()
-    expired = {k: v for k, v in cache.items() if v.get("expire_at", 0) < now_ts}
+    # expire_at=0 或缺失表示"永不过期"（如按天缓存的历史日期）
+    expired = {k: v for k, v in cache.items()
+               if v.get("expire_at", 0) != 0 and v.get("expire_at", 0) < now_ts}
     if not expired:
         return cache
     if backup:
         if not _backup_expired_entries(expired, cache_type):
             logger.warning(f"{cache_type} 过期条目备份失败，跳过清理")
             return cache
-    valid = {k: v for k, v in cache.items() if v.get("expire_at", 0) >= now_ts}
+    valid = {k: v for k, v in cache.items()
+             if v.get("expire_at", 0) == 0 or v.get("expire_at", 0) >= now_ts}
     logger.info(f"{cache_type} 已清理 {len(expired)} 条过期条目（{'已备份' if backup else '未备份'}），剩余 {len(valid)} 条")
     return valid
 
@@ -167,8 +170,19 @@ def save_ranking_cache(cache: dict) -> None:
 def invalidate_ranking_cache() -> None:
     _invalidate_cache(_RANKING_CACHE_FILE, _lock_ranking, "ranking")
 
-def invalidate_clock_detail_cache() -> None:
-    _invalidate_cache(_CLOCK_DETAIL_CACHE_FILE, _lock_clock_detail, "clock_detail", backup=False)
+def invalidate_clock_detail_cache(date_str: str = None) -> None:
+    """清除签到详情缓存：传 date_str 只删当天 key，不传删整个文件。"""
+    if date_str is None:
+        _invalidate_cache(_CLOCK_DETAIL_CACHE_FILE, _lock_clock_detail, "clock_detail", backup=False)
+        return
+    with _lock_clock_detail:
+        cache = _read_json(_CLOCK_DETAIL_CACHE_FILE)
+        if not cache:
+            return
+        if date_str in cache:
+            del cache[date_str]
+            _atomic_write_json(_CLOCK_DETAIL_CACHE_FILE, cache)
+            logger.info(f"已清除签到详情缓存: {date_str}")
 
 def invalidate_journal_cache(blog_type: str) -> None:
     """清除指定 blog_type 的所有分页缓存（线程安全）"""
@@ -221,7 +235,7 @@ def get_clock_detail_cache_stats() -> dict:
                 latest = cached_at
     now = time.time()
     expired = sum(1 for v in cache.values()
-                  if isinstance(v, dict) and v.get("expire_at", 0) < now)
+                  if isinstance(v, dict) and v.get("expire_at", 0) != 0 and v.get("expire_at", 0) < now)
     return {
         "total_ranges": total_ranges,
         "total_records": total_records,
@@ -335,6 +349,8 @@ def save_session_cache(args: dict, plan_data: dict = None,
     if plan_data and plan_data.get("clockVo"):
         record["traineeId"] = str(plan_data["clockVo"]["traineeId"])
         record["planId"] = str(plan_data["clockVo"]["planId"])
+        record["endDate"] = str(plan_data["clockVo"]["endDate"])
+        record["startDate"] = str(plan_data["clockVo"]["startDate"])
 
     # 保留已有的 securityFingerprint（登录前的 _get_open_id 可能已写入）
     try:

@@ -278,7 +278,7 @@ class JournalManager:
         timeout = int(self.config.get("requestTimeout", 10))
         resp = _form_post(
             url, data, config=self.config, args=args,
-            include_device_code=True, timeout=timeout, action="获取周/月记列表"
+            include_device_code=False, timeout=timeout, action="获取周/月记列表"
         )
         res = resp.json()
 

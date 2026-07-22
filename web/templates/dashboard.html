@@ -558,27 +558,31 @@
         });
 
         var allDates = Object.keys(dateMap).sort();
+        if (allDates.length === 0) {
+            charts.chartSignStatus.setOption(emptyOpt('暂无签到详情缓存数据'));
+            return;
+        }
+
         // 超过35天时，每次去除最早一周（7天），确保日历周完整
         var dates = allDates;
         while (dates.length > 35) {
             dates = dates.slice(7);
         }
-        // 对齐到周一：如果第一条不是周一，前移 startDate 到周一
+
+        // 对齐到周一
         var startDate = dates[0];
         var endDate = dates[dates.length - 1];
         var startDay = new Date(startDate).getDay() || 7;
         if (startDay > 1) {
-            // 前移 startDate 到本周一，让日历从完整周开始
             var d = new Date(startDate);
             d.setDate(d.getDate() - (startDay - 1));
             startDate = d.toISOString().slice(0, 10);
         }
-        if (dates.length === 0) return;
 
         var data = dates.map(function (d) {
             var rec = dateMap[d];
             var events = rec.events.slice(0, 4);
-            return [d, events.join('|'), rec.outTime, rec.inTime];  // 新增 inTime
+            return [d, events.join('|'), rec.outTime, rec.inTime];
         });
 
         charts.chartSignStatus.setOption({
@@ -616,30 +620,34 @@
                     if (isNaN(cellPoint[0]) || isNaN(cellPoint[1])) return;
 
                     var value = api.value(1) || '';
-                    var events = value.split('|');
+                    var events = value ? value.split('|') : [];
                     var outTime = api.value(2) || '';
-                    var inTime = api.value(3) || '';   // 新增
+                    var inTime = api.value(3) || '';
 
                     var group = { type: 'group', children: [] };
-                    var layout = (layouts[events.length - 1] || []);
-                    events.forEach(function (evtStr, idx) {
-                        var evt = +evtStr;
-                        if (isNaN(evt) || evt >= pathes.length) return;
-                        group.children.push({
-                            type: 'path',
-                            shape: { pathData: pathes[evt], x: -8, y: -8, width: 16, height: 16 },
-                            position: [
-                                cellPoint[0] + echarts.number.linearMap(layout[idx] ? layout[idx][0] : 0, [-0.5, 0.5], [-cellWidth / 2, cellWidth / 2]),
-                                cellPoint[1] + echarts.number.linearMap(layout[idx] ? layout[idx][1] : 0, [-0.5, 0.5], [-cellHeight / 2 + 20, cellHeight / 2])
-                            ],
-                            style: api.style({ fill: colors[evt] })
+                    if (events.length > 0 && events[0] !== '') {
+                        var layout = (layouts[Math.min(events.length, 4) - 1] || []);
+                        events.forEach(function (evtStr, idx) {
+                            var evt = +evtStr;
+                            if (isNaN(evt) || evt >= pathes.length) return;
+                            group.children.push({
+                                type: 'path',
+                                shape: { pathData: pathes[evt], x: -8, y: -8, width: 16, height: 16 },
+                                position: [
+                                    cellPoint[0] + echarts.number.linearMap(layout[idx] ? layout[idx][0] : 0, [-0.5, 0.5], [-cellWidth / 2, cellWidth / 2]),
+                                    cellPoint[1] + echarts.number.linearMap(layout[idx] ? layout[idx][1] : 0, [-0.5, 0.5], [-cellHeight / 2 + 20, cellHeight / 2])
+                                ],
+                                style: api.style({ fill: colors[evt] })
+                            });
                         });
-                    });
+                    }
 
                     // 日期数字
                     group.children.push({
                         type: 'text',
-                        style: { x: cellPoint[0], y: cellPoint[1] - cellHeight / 2 + 15, text: echarts.format.formatTime('dd', api.value(0)), fill: '#777', textFont: api.font({ fontSize: 14 }) }
+                        style: { x: cellPoint[0], y: cellPoint[1] - cellHeight / 2 + 15,
+                            text: echarts.format.formatTime('dd', new Date(api.value(0))),
+                            fill: '#777', textFont: api.font({ fontSize: 14 }) }
                     });
 
                     // 签到时间（在签退时间上方）
@@ -683,6 +691,9 @@
 
             ['journal_list', 'clock_detail', 'ranking'].forEach(function (type) {
                 var entries = resp.details[type] || [];
+                if (entries.length === 0) return;
+                // 过滤掉无过期时间的条目（如按天缓存的历史日期）
+                entries = entries.filter(function (e) { return e.expire_at; });
                 if (entries.length === 0) return;
                 var children = entries.map(function (e) {
                     var label = e.key;
