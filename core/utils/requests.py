@@ -169,6 +169,7 @@ def _fetch_security_token(config, fingerprint, args=None, timeout=5, force=False
     else:
         headers = {
             **_base_xcx_headers(config),
+            "devicecode": get_device_code("", config.get("device", {})),
             "n": XCX_N_HEADER,
             "wechat": "1",
         }
